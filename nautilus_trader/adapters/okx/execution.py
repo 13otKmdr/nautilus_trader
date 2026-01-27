@@ -73,6 +73,7 @@ from nautilus_trader.model.identifiers import ClientId
 from nautilus_trader.model.identifiers import ClientOrderId
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.instruments import CurrencyPair
+from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.model.objects import Quantity
 from nautilus_trader.model.orders import Order
 
@@ -811,6 +812,95 @@ class OKXExecutionClient(LiveExecutionClient):
             ts_init=self._clock.timestamp_ns(),
         )
 
+    def _create_flat_report(self, instrument: Instrument) -> PositionStatusReport:
+        return PositionStatusReport.create_flat(
+            account_id=self.account_id,
+            instrument_id=instrument.id,
+            size_precision=instrument.size_precision,
+            ts_init=self._clock.timestamp_ns(),
+        )
+
+    async def _fetch_spot_position_reports(
+        self,
+        instrument: Instrument | None = None,
+    ) -> list[PositionStatusReport]:
+        pyo3_reports: list[nautilus_pyo3.PositionStatusReport] = []
+        reports: list[PositionStatusReport] = []
+
+        if self._config.use_spot_margin:
+            # SPOT MARGIN: Use positions API like SWAP/FUTURES (always)
+            pyo3_instrument_id = (
+                nautilus_pyo3.InstrumentId.from_str(instrument.id.value)
+                if instrument
+                else None
+            )
+            response = await self._http_client.request_position_status_reports(
+                account_id=self.pyo3_account_id,
+                instrument_id=pyo3_instrument_id,
+                instrument_type=OKXInstrumentType.MARGIN,
+            )
+
+            if response:
+                pyo3_reports.extend(response)
+            elif instrument:
+                reports.append(self._create_flat_report(instrument))
+
+        elif self._config.use_spot_cash_position_reports:
+            # SPOT CASH: Use wallet balance calculation
+            instrument_id = instrument.id if instrument else None
+            spot_reports = await self._generate_spot_position_reports_from_wallet(instrument_id)
+            reports.extend(spot_reports)
+
+        elif instrument:
+            # SPOT CASH without position reports: Return FLAT
+            reports.append(self._create_flat_report(instrument))
+
+        # Convert pyo3 reports
+        for pyo3_report in pyo3_reports:
+            report = PositionStatusReport.from_pyo3(pyo3_report)
+            self._log.debug(f"Received {report}", LogColor.MAGENTA)
+            reports.append(report)
+
+        return reports
+
+    async def _fetch_standard_position_reports(
+        self,
+        instrument_id: InstrumentId | None = None,
+        instrument_type: OKXInstrumentType | None = None,
+    ) -> list[PositionStatusReport]:
+        pyo3_reports: list[nautilus_pyo3.PositionStatusReport] = []
+        reports: list[PositionStatusReport] = []
+
+        pyo3_instrument_id = (
+            nautilus_pyo3.InstrumentId.from_str(instrument_id.value)
+            if instrument_id
+            else None
+        )
+
+        response = await self._http_client.request_position_status_reports(
+            account_id=self.pyo3_account_id,
+            instrument_id=pyo3_instrument_id,
+            instrument_type=instrument_type,
+        )
+
+        if response:
+            pyo3_reports.extend(response)
+        elif instrument_id:
+            instrument = self._cache.instrument(instrument_id)
+            if instrument is None:
+                raise RuntimeError(
+                    f"Cannot create FLAT position report - instrument {instrument_id} not found in cache",
+                )
+            reports.append(self._create_flat_report(instrument))
+
+        # Convert pyo3 reports
+        for pyo3_report in pyo3_reports:
+            report = PositionStatusReport.from_pyo3(pyo3_report)
+            self._log.debug(f"Received {report}", LogColor.MAGENTA)
+            reports.append(report)
+
+        return reports
+
     async def generate_position_status_reports(  # noqa: C901 (too complex)
         self,
         command: GeneratePositionStatusReports,
@@ -824,7 +914,6 @@ class OKXExecutionClient(LiveExecutionClient):
             " ...",
         )
 
-        pyo3_reports: list[nautilus_pyo3.PositionStatusReport] = []
         reports: list[PositionStatusReport] = []
 
         try:
@@ -835,97 +924,26 @@ class OKXExecutionClient(LiveExecutionClient):
                         f"Cannot create position report - instrument {command.instrument_id} not found in cache",
                     )
 
-                # TODO: Refactor the below
                 if isinstance(instrument, CurrencyPair):
-                    # SPOT instruments: check margin mode first
-                    if self._config.use_spot_margin:
-                        # SPOT MARGIN: Use positions API like SWAP/FUTURES (always)
-                        pyo3_instrument_id = nautilus_pyo3.InstrumentId.from_str(
-                            command.instrument_id.value,
-                        )
-                        response = await self._http_client.request_position_status_reports(
-                            account_id=self.pyo3_account_id,
-                            instrument_id=pyo3_instrument_id,
-                            instrument_type=OKXInstrumentType.MARGIN,
-                        )
-
-                        if not response:
-                            report = PositionStatusReport.create_flat(
-                                account_id=self.account_id,
-                                instrument_id=command.instrument_id,
-                                size_precision=instrument.size_precision,
-                                ts_init=self._clock.timestamp_ns(),
-                            )
-                            reports.append(report)
-                        else:
-                            pyo3_reports.extend(response)
-                    elif self._config.use_spot_cash_position_reports:
-                        # SPOT CASH: Use wallet balance calculation
-                        spot_reports = await self._generate_spot_position_reports_from_wallet(
-                            command.instrument_id,
-                        )
-                        reports.extend(spot_reports)
-                    else:
-                        # SPOT CASH without position reports: Return FLAT
-                        report = PositionStatusReport.create_flat(
-                            account_id=self.account_id,
-                            instrument_id=command.instrument_id,
-                            size_precision=instrument.size_precision,
-                            ts_init=self._clock.timestamp_ns(),
-                        )
-                        reports.append(report)
+                    spot_reports = await self._fetch_spot_position_reports(instrument)
+                    reports.extend(spot_reports)
                 else:
-                    pyo3_instrument_id = nautilus_pyo3.InstrumentId.from_str(
-                        command.instrument_id.value,
+                    std_reports = await self._fetch_standard_position_reports(
+                        instrument_id=command.instrument_id,
                     )
-                    response = await self._http_client.request_position_status_reports(
-                        account_id=self.pyo3_account_id,
-                        instrument_id=pyo3_instrument_id,
-                    )
-
-                    if not response:
-                        instrument = self._cache.instrument(command.instrument_id)
-                        if instrument is None:
-                            raise RuntimeError(
-                                f"Cannot create FLAT position report - instrument {command.instrument_id} not found in cache",
-                            )
-                        report = PositionStatusReport.create_flat(
-                            account_id=self.account_id,
-                            instrument_id=command.instrument_id,
-                            size_precision=instrument.size_precision,
-                            ts_init=self._clock.timestamp_ns(),
-                        )
-                        reports.append(report)
-                    else:
-                        pyo3_reports.extend(response)
+                    reports.extend(std_reports)
             else:
                 for instrument_type in self._config.instrument_types:
                     if instrument_type == OKXInstrumentType.SPOT:
-                        # SPOT instruments: check margin mode first
-                        if self._config.use_spot_margin:
-                            # SPOT MARGIN: Use positions API like SWAP/FUTURES (always)
-                            response = await self._http_client.request_position_status_reports(
-                                account_id=self.pyo3_account_id,
-                                instrument_type=OKXInstrumentType.MARGIN,
-                            )
-                            pyo3_reports.extend(response)
-                        elif self._config.use_spot_cash_position_reports:
-                            # SPOT CASH: Use wallet balance calculation
-                            spot_reports = await self._generate_spot_position_reports_from_wallet()
-                            reports.extend(spot_reports)
-                        # If neither, skip SPOT entirely (no position reports)
+                        spot_reports = await self._fetch_spot_position_reports(None)
+                        reports.extend(spot_reports)
                         continue
 
-                    response = await self._http_client.request_position_status_reports(
-                        account_id=self.pyo3_account_id,
+                    std_reports = await self._fetch_standard_position_reports(
                         instrument_type=instrument_type,
                     )
-                    pyo3_reports.extend(response)
+                    reports.extend(std_reports)
 
-            for pyo3_report in pyo3_reports:
-                report = PositionStatusReport.from_pyo3(pyo3_report)
-                self._log.debug(f"Received {report}", LogColor.MAGENTA)
-                reports.append(report)
         except ValueError as e:
             if "request canceled" in str(e).lower():
                 self._log.debug("PositionReports request cancelled during shutdown")
