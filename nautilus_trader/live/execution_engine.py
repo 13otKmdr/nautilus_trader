@@ -2990,7 +2990,7 @@ class LiveExecutionEngine(ExecutionEngine):
                 ):
                     return True
 
-                self._log.debug(  # TODO: Reduce level to debug after initial development phase
+                self._log.debug(
                     f"{order.instrument_id} {order.client_order_id!r} already {order.status_string()} but "
                     f"reported difference in filled_qty: "
                     f"report={report.filled_qty}, cached={order.filled_qty}, "
