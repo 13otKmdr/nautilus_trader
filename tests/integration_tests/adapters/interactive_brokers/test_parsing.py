@@ -540,3 +540,39 @@ def test_parse_instrument_future_option():
     # Assert
     assert instrument.id.value == "E4AN4 C5655.CME"
     assert isinstance(instrument, OptionContract), "instrument is not a OptionContract"
+
+def test_activation_date_calculation():
+    # Arrange
+    # Case 1: Issue Date
+    details_1 = IBTestContractStubs.cl_future_contract_details()
+    details_1.issueDate = "20230101"
+    details_1.timeZoneId = "UTC"
+    # Ensure expiration is computed correctly or doesn't interfere (expiry uses lastTradeDateOrContractMonth)
+
+    # Act
+    contract_1 = parse_instrument(details_1, "NYMEX")
+
+    # Assert
+    # Activation should match issueDate
+    expected_1 = pd.Timestamp("2023-01-01", tz="UTC")
+    assert contract_1.activation_ns == expected_1.value
+
+    # Case 2: Fallback (Long dated)
+    details_3 = IBTestContractStubs.cl_future_contract_details()
+    # Set expiration to 2 years from now
+    expiry_dt = pd.Timestamp.now("UTC").floor("D") + pd.Timedelta(days=730)
+    details_3.contract.lastTradeDateOrContractMonth = expiry_dt.strftime("%Y%m%d")
+    details_3.tradingHours = "CLOSED"  # Invalid trading hours for parsing start
+    details_3.issueDate = ""
+    details_3.timeZoneId = "UTC"
+
+    # Act
+    contract_3 = parse_instrument(details_3, "NYMEX")
+
+    # Assert
+    # Expected: Expiry - 10 years (3650 days)
+    # expiry_timestring_to_datetime will return expiry_dt because tradingHours parsing will fail/return CLOSED
+    expected_expiry = pd.Timestamp(expiry_dt.strftime("%Y%m%d"), tz="UTC")
+    expected_activation = expected_expiry - pd.Timedelta(days=3650)
+
+    assert contract_3.activation_ns == expected_activation.value
