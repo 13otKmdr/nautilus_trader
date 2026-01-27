@@ -406,12 +406,32 @@ class TradingNode:
         """
         await self.kernel.stop_async()
 
-    def dispose(self) -> None:
+    def _dispose_resources(self) -> None:
+        self.kernel.logger.debug("DISPOSING")
+
+        if self._task_streaming:
+            self.kernel.logger.info("Canceling task 'streaming'")
+            self._task_streaming.cancel()
+            self._task_streaming = None
+
+        self.kernel.logger.debug(str(self.kernel.data_engine.get_cmd_queue_task()))
+        self.kernel.logger.debug(str(self.kernel.data_engine.get_req_queue_task()))
+        self.kernel.logger.debug(str(self.kernel.data_engine.get_res_queue_task()))
+        self.kernel.logger.debug(str(self.kernel.data_engine.get_data_queue_task()))
+        self.kernel.logger.debug(str(self.kernel.exec_engine.get_cmd_queue_task()))
+        self.kernel.logger.debug(str(self.kernel.exec_engine.get_evt_queue_task()))
+        self.kernel.logger.debug(str(self.kernel.risk_engine.get_cmd_queue_task()))
+        self.kernel.logger.debug(str(self.kernel.risk_engine.get_evt_queue_task()))
+
+        self.kernel.dispose()
+
+        if self.kernel.executor:
+            self.kernel.logger.info("Shutting down executor")
+            self.kernel.executor.shutdown(wait=True, cancel_futures=True)
+
+    async def dispose_async(self) -> None:
         """
-        Dispose of the trading node.
-
-        Gracefully shuts down the executor and event loop.
-
+        Dispose of the trading node asynchronously.
         """
         try:
             timeout = self.kernel.clock.utc_now() + timedelta(
@@ -419,7 +439,7 @@ class TradingNode:
             )
 
             while self.kernel.is_running():
-                time.sleep(0.1)
+                await asyncio.sleep(0.1)
 
                 if self.kernel.clock.utc_now() >= timeout:
                     self.kernel.logger.warning(
@@ -431,29 +451,42 @@ class TradingNode:
                     )
                     break
 
-            self.kernel.logger.debug("DISPOSING")
+        except (asyncio.CancelledError, RuntimeError) as e:
+            self.kernel.logger.exception("Error on dispose_async", e)
+        finally:
+            self._dispose_resources()
 
-            if self._task_streaming:
-                self.kernel.logger.info("Canceling task 'streaming'")
-                self._task_streaming.cancel()
-                self._task_streaming = None
+    def dispose(self) -> None:
+        """
+        Dispose of the trading node.
 
-            self.kernel.logger.debug(str(self.kernel.data_engine.get_cmd_queue_task()))
-            self.kernel.logger.debug(str(self.kernel.data_engine.get_req_queue_task()))
-            self.kernel.logger.debug(str(self.kernel.data_engine.get_res_queue_task()))
-            self.kernel.logger.debug(str(self.kernel.data_engine.get_data_queue_task()))
-            self.kernel.logger.debug(str(self.kernel.exec_engine.get_cmd_queue_task()))
-            self.kernel.logger.debug(str(self.kernel.exec_engine.get_evt_queue_task()))
-            self.kernel.logger.debug(str(self.kernel.risk_engine.get_cmd_queue_task()))
-            self.kernel.logger.debug(str(self.kernel.risk_engine.get_evt_queue_task()))
+        Gracefully shuts down the executor and event loop.
 
-            self.kernel.dispose()
-
-            if self.kernel.executor:
-                self.kernel.logger.info("Shutting down executor")
-                self.kernel.executor.shutdown(wait=True, cancel_futures=True)
-
+        """
+        try:
             loop = self.kernel.loop
+            if not loop.is_running():
+                loop.run_until_complete(self.dispose_async())
+            else:
+                try:
+                    timeout = self.kernel.clock.utc_now() + timedelta(
+                        seconds=self._config.timeout_disconnection,
+                    )
+
+                    while self.kernel.is_running():
+                        time.sleep(0.1)
+
+                        if self.kernel.clock.utc_now() >= timeout:
+                            self.kernel.logger.warning(
+                                f"Timed out ({self._config.timeout_disconnection}s) waiting for node to stop"
+                                f"\nStatus"
+                                f"\n------"
+                                f"\nDataEngine.check_disconnected() == {self.kernel.data_engine.check_disconnected()}"
+                                f"\nExecEngine.check_disconnected() == {self.kernel.exec_engine.check_disconnected()}",
+                            )
+                            break
+                finally:
+                    self._dispose_resources()
 
             if not loop.is_closed():
                 if loop.is_running():
