@@ -37,6 +37,7 @@ from nautilus_trader.core.correctness import PyCondition
 from nautilus_trader.live.factories import LiveDataClientFactory
 from nautilus_trader.live.factories import LiveExecClientFactory
 from nautilus_trader.model.identifiers import AccountId
+from nautilus_trader.persistence.catalog.base import BaseDataCatalog
 
 
 GATEWAYS: dict[tuple, DockerizedIBGateway] = {}
@@ -142,6 +143,7 @@ def get_cached_interactive_brokers_instrument_provider(
     client: InteractiveBrokersClient,
     clock: LiveClock,
     config: InteractiveBrokersInstrumentProviderConfig,
+    catalog: BaseDataCatalog | None = None,
 ) -> InteractiveBrokersInstrumentProvider:
     """
     Cache and return a InteractiveBrokersInstrumentProvider.
@@ -157,6 +159,8 @@ def get_cached_interactive_brokers_instrument_provider(
         The clock for the provider.
     config: InteractiveBrokersInstrumentProviderConfig
         The instrument provider config
+    catalog: BaseDataCatalog, optional
+        The data catalog.
 
     Returns
     -------
@@ -172,7 +176,12 @@ def get_cached_interactive_brokers_instrument_provider(
     provider_key = (client_key, hash(config))
 
     if provider_key not in IB_INSTRUMENT_PROVIDERS:
-        provider = InteractiveBrokersInstrumentProvider(client=client, clock=clock, config=config)
+        provider = InteractiveBrokersInstrumentProvider(
+            client=client,
+            clock=clock,
+            config=config,
+            catalog=catalog,
+        )
         IB_INSTRUMENT_PROVIDERS[provider_key] = provider
 
     return IB_INSTRUMENT_PROVIDERS[provider_key]

@@ -40,6 +40,7 @@ from nautilus_trader.adapters.interactive_brokers.parsing.instruments import (
 from nautilus_trader.common.component import Clock
 from nautilus_trader.common.providers import InstrumentProvider
 from nautilus_trader.config import resolve_path
+from nautilus_trader.persistence.catalog.base import BaseDataCatalog
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import generic_spread_id_to_list
 from nautilus_trader.model.identifiers import is_generic_spread_id
@@ -57,6 +58,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         client: InteractiveBrokersClient,
         clock: Clock,
         config: InteractiveBrokersInstrumentProviderConfig,
+        catalog: BaseDataCatalog | None = None,
     ) -> None:
         """
         Initialize a new instance of the ``InteractiveBrokersInstrumentProvider`` class.
@@ -69,6 +71,8 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
             The clock for the provider.
         config : InteractiveBrokersInstrumentProviderConfig
             The instrument provider config
+        catalog : BaseDataCatalog, optional
+            The data catalog.
 
         """
         super().__init__(config=config)
@@ -85,16 +89,23 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         self._convert_exchange_to_mic_venue = config.convert_exchange_to_mic_venue
         self._symbol_to_mic_venue = config.symbol_to_mic_venue
         self._filter_sec_types = set(config.filter_sec_types)
-        # TODO: If cache_validity_days > 0 and Catalog is provided
 
         self._client = client
         self._clock = clock
         self.config = config
+        self._catalog = catalog
         self.contract_details: dict[InstrumentId, IBContractDetails] = {}
         self.contract_id_to_instrument_id: dict[int, InstrumentId] = {}
         self.contract: dict[InstrumentId, IBContract] = {}
 
     async def initialize(self, reload: bool = False) -> None:
+        if (
+            self._cache_validity_days is not None
+            and self._cache_validity_days > 0
+            and self._catalog is not None
+        ):
+            self._load_from_catalog()
+
         await super().initialize(reload)
 
         # Trigger contract loading only if `load_ids_on_start` is False and `load_contracts_on_start` is True
@@ -104,6 +115,50 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
             await self.load_all_async()  # Load all instruments passed as config at startup
             self._loading = False
             self._loaded = True
+
+    def _load_from_catalog(self) -> None:
+        ids_to_load = []
+        if self._load_ids_on_start:
+            ids_to_load = [str(i) for i in self._load_ids_on_start]
+
+        if not ids_to_load:
+            return
+
+        self._log.info(f"Checking catalog for {len(ids_to_load)} instruments...")
+        instruments = self._catalog.instruments(instrument_ids=ids_to_load)
+
+        valid_instruments = []
+        now = self._clock.utc_now()
+
+        for instrument in instruments:
+            # Check validity
+            ts_event_ns = instrument.ts_event
+            if not ts_event_ns:
+                continue
+
+            ts_event = pd.Timestamp(ts_event_ns, unit="ns", tz="UTC")
+            age = now - ts_event
+            if age.days < self._cache_validity_days:
+                # Check if it has contract info
+                if instrument.info and instrument.info.get("contract"):
+                    valid_instruments.append(instrument)
+
+        if valid_instruments:
+            self._log.info(f"Found {len(valid_instruments)} valid instruments in catalog")
+
+            for instrument in valid_instruments:
+                try:
+                    details = dict_to_contract_details(instrument.info)
+
+                    self.add(instrument)
+                    if not self._client._cache.instrument(instrument.id):
+                        self._client._cache.add_instrument(instrument)
+
+                    self.contract[instrument.id] = details.contract
+                    self.contract_details[instrument.id] = details
+                    self.contract_id_to_instrument_id[details.contract.conId] = instrument.id
+                except Exception as e:
+                    self._log.error(f"Failed to restore cached instrument {instrument.id}: {e}")
 
     def _is_filtered_sec_type(self, sec_type: str | None) -> bool:
         return bool(sec_type and sec_type in self._filter_sec_types)
