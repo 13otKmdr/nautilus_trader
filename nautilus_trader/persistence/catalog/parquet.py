@@ -163,6 +163,12 @@ class ParquetDataCatalog(BaseDataCatalog):
 
         self.path = str(final_path)
 
+        self._intervals_cache: dict[str, list[tuple[int, int]]] = {}
+
+    def _invalidate_cache(self, directory: str) -> None:
+        if directory in self._intervals_cache:
+            del self._intervals_cache[directory]
+
     @classmethod
     def from_env(cls) -> ParquetDataCatalog:
         """
@@ -360,6 +366,10 @@ class ParquetDataCatalog(BaseDataCatalog):
             row_group_size=self.max_rows_per_group,
         )
 
+        if directory in self._intervals_cache:
+            self._intervals_cache[directory].append((start, end))
+            self._intervals_cache[directory].sort(key=lambda x: x[0])
+
     def _objects_to_table(self, data: list[Data], data_cls: type) -> pa.Table:
         PyCondition.not_empty(data, "data")
         PyCondition.list_type(data, data_cls, "data")
@@ -441,6 +451,7 @@ class ParquetDataCatalog(BaseDataCatalog):
                 self.fs.rename(old_path, new_path)
                 break
 
+        self._invalidate_cache(directory)
         intervals = self._get_directory_intervals(directory)
         assert _are_intervals_disjoint(
             intervals,
@@ -527,6 +538,7 @@ class ParquetDataCatalog(BaseDataCatalog):
             new_path = os.path.join(os.path.dirname(file), new_filename)
             self.fs.rename(file, new_path)
 
+        self._invalidate_cache(directory)
         intervals = self._get_directory_intervals(directory)
         assert _are_intervals_disjoint(
             intervals,
@@ -712,6 +724,7 @@ class ParquetDataCatalog(BaseDataCatalog):
         )
         files_to_consolidate.sort()
         self._combine_parquet_files(files_to_consolidate, new_file_name, deduplicate=deduplicate)
+        self._invalidate_cache(directory)
 
     def _combine_parquet_files(
         self,
@@ -965,6 +978,8 @@ class ParquetDataCatalog(BaseDataCatalog):
         # Remove any remaining files that weren't removed in the loop
         for file in existing_files:
             self.fs.rm(file)
+
+        self._invalidate_cache(directory)
 
     def _prepare_consolidation_queries(  # noqa: C901
         self,
@@ -1368,6 +1383,9 @@ class ParquetDataCatalog(BaseDataCatalog):
         for file in files_to_remove:
             if self.fs.exists(file):
                 self.fs.rm(file)
+
+        directory = self._make_path(data_cls, identifier)
+        self._invalidate_cache(directory)
 
     def _prepare_delete_operations(
         self,
@@ -2235,6 +2253,9 @@ class ParquetDataCatalog(BaseDataCatalog):
         return self._get_directory_intervals(directory)
 
     def _get_directory_intervals(self, directory: str) -> list[tuple[int, int]]:
+        if directory in self._intervals_cache:
+            return self._intervals_cache[directory]
+
         parquet_files = self.fs.glob(os.path.join(directory, "*.parquet"))
         intervals = []
 
@@ -2245,6 +2266,8 @@ class ParquetDataCatalog(BaseDataCatalog):
                 intervals.append(interval)
 
         intervals.sort(key=lambda x: x[0])
+
+        self._intervals_cache[directory] = intervals
 
         return intervals
 
