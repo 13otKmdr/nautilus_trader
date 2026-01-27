@@ -167,6 +167,14 @@ cdef class ExecutionClient(Component):
         VenueOrderId venue_order_id,
         uint64_t ts_event,
     )
+    cpdef void generate_order_pending_cancel(
+        self,
+        StrategyId strategy_id,
+        InstrumentId instrument_id,
+        ClientOrderId client_order_id,
+        VenueOrderId venue_order_id,
+        uint64_t ts_event,
+    )
     cpdef void generate_order_expired(
         self,
         StrategyId strategy_id,

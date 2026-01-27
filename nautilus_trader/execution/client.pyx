@@ -729,6 +729,46 @@ cdef class ExecutionClient(Component):
 
         self._send_order_event(triggered)
 
+    cpdef void generate_order_pending_cancel(
+        self,
+        StrategyId strategy_id,
+        InstrumentId instrument_id,
+        ClientOrderId client_order_id,
+        VenueOrderId venue_order_id,
+        uint64_t ts_event,
+    ):
+        """
+        Generate an `OrderPendingCancel` event and send it to the `ExecutionEngine`.
+
+        Parameters
+        ----------
+        strategy_id : StrategyId
+            The strategy ID associated with the event.
+        instrument_id : InstrumentId
+            The instrument ID.
+        client_order_id : ClientOrderId
+            The client order ID.
+        venue_order_id : VenueOrderId
+            The venue order ID (assigned by the venue).
+        ts_event : uint64_t
+            UNIX timestamp (nanoseconds) when the order pending cancel event occurred.
+
+        """
+        # Generate event
+        cdef OrderPendingCancel pending_cancel = OrderPendingCancel(
+            trader_id=self.trader_id,
+            strategy_id=strategy_id,
+            instrument_id=instrument_id,
+            client_order_id=client_order_id,
+            venue_order_id=venue_order_id,
+            account_id=self.account_id,
+            event_id=UUID4(),
+            ts_event=ts_event,
+            ts_init=self._clock.timestamp_ns(),
+        )
+
+        self._send_order_event(pending_cancel)
+
     cpdef void generate_order_expired(
         self,
         StrategyId strategy_id,
