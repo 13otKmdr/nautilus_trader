@@ -356,7 +356,7 @@ RUST_SERIALIZERS = {
     Bar,
     MarkPriceUpdate,
     IndexPriceUpdate,
-    # InstrumentClose,  # TODO: Not implemented yet
+    InstrumentClose,
 }
 RUST_STR_SERIALIZERS = {s.__name__ for s in RUST_SERIALIZERS}
 

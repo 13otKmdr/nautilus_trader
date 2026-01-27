@@ -95,21 +95,11 @@ NAUTILUS_ARROW_SCHEMA = {
         ],
     ),
     InstrumentClose: pa.schema(
-        {
-            "instrument_id": pa.dictionary(pa.int64(), pa.string()),
-            "close_type": pa.dictionary(pa.int8(), pa.string()),
-            "close_price": pa.string(),
-            "ts_event": pa.uint64(),
-            "ts_init": pa.uint64(),
-        },
-        metadata={"type": "InstrumentClose"},
+        [
+            pa.field(k, infer_dtype(v), False)
+            for k, v in nautilus_pyo3.InstrumentClose.get_fields().items()
+        ],
     ),
-    # InstrumentClose: pa.schema(  # TODO: Not implemented yet
-    #     [
-    #         pa.field(k, infer_dtype(v), False)
-    #         for k, v in nautilus_pyo3.InstrumentClose.get_fields().items()
-    #     ],
-    # ),
     InstrumentStatus: pa.schema(
         {
             "instrument_id": pa.dictionary(pa.int64(), pa.string()),
