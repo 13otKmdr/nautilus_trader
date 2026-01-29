@@ -2,12 +2,16 @@
 
 Released on TBD (UTC).
 
+This will be the final release with support for the dYdX v3 (legacy) API. Future releases will only support dYdX v4 (Cosmos-based).
+
 ### Enhancements
 - Added sandbox execution adapter in Rust
 - Added multi-account execution support (#3194), thanks @faysou
 - Added tracing subscriber for external Rust library logs (`use_tracing=True` in `LoggingConfig`, filter with `RUST_LOG` env var)
 - Added `use_market_order_acks` venue config option to generate `OrderAccepted` events for market orders before filling (mimics behavior of venues like Binance)
 - Added `oto_trigger_mode` venue config option to control whether OTO child orders activate on partial fills (PARTIAL) or only after full fill (FULL) (default PARTIAL) (#3454), thanks @godnight10061
+- Added `request_funding_rates` and `FundingRateUpdate` Arrow serialization (#3467), thanks @dxwil
+- Added Polymarket data loader event-level API support (#3484), thanks @jsemldonado
 - Improved tearsheet with dynamic Nautilus version and refined run info table (#3396), thanks @KaulSe
 
 ### Breaking Changes
@@ -56,11 +60,15 @@ Released on TBD (UTC).
 - Fixed Betfair stream batch handling and modify/cancel edge cases
 - Fixed Binance Spot WebSocket subscription acknowledgment parsing (#3382), thanks @Johnkhk
 - Fixed Binance Futures instrument parsing for margin requirements (#3420), thanks @linimin
-- Fixed Binance algo order quantity `AttributeError` on _mem access
+- Fixed Binance algo order quantity `AttributeError` on `_mem` access
+- Fixed Binance `cancel_all_orders` to route futures algo orders through correct cancel endpoint
+- Fixed Binance Spot `OrderStatusReport.avg_px` always None (#3499), thanks for reporting @mrbaron3
+- Fixed Binance Spot `client_order_id` replaced with UUID (#3500), thanks for reporting @mrbaron3
 - Fixed Bybit demo trading by using HTTP REST API for order operations (Bybit demo does not support WebSocket Trade API)
 - Fixed Bybit HOUR bars not triggering on_bar (#3474), thanks for reporting @88z
 - Fixed Databento `databento_data` to fetch definitions for full date range (#3414), thanks @Johnkhk
 - Fixed Databento zero-length interval at dataset boundary (#3429), thanks @shzhng
+- Fixed Databento empty underlying for index-based derivatives (#3480), thanks for reporting @davidsblom
 - Fixed Deribit auth token refresh race condition (#3402), thanks @filipmacek
 - Fixed Deribit race condition between response and subscription (#3436), thanks @filipmacek
 - Fixed Deribit grouped book channel parsing (#3473), thanks @filipmacek
@@ -74,6 +82,8 @@ Released on TBD (UTC).
 - Fixed Interactive Brokers OrderStatusReport filled_qty always being 0 for open orders causing reconciliation errors, thanks @shzhng
 - Fixed Interactive Brokers external order ID collision where orders placed via TWS/other clients (orderId=0) could cause fills to be attributed to wrong orders (#3465), thanks @shzhng
 - Fixed Interactive Brokers position reconciliation double-counting partial fills from open orders (#3476), thanks @shzhng
+- Fixed Interactive Brokers future chain building for index instruments (#3483), thanks @davidsblom
+- Fixed reconciliation race condition where inferred fills were generated before real fills arrived, causing double-counting and overfill errors
 - Fixed Kraken spot instrument fee/margin parsing where parameters were incorrectly swapped
 - Fixed Polymarket order state race condition where `PLACEMENT` events could arrive late
 - Fixed Polymarket duplicate WebSocket subscriptions (#3403), thanks for reporting @santivazq
@@ -98,7 +108,10 @@ Released on TBD (UTC).
 - Refactored `TearsheetConfig.charts` to chart objects (removed `chart_args`) (#3398), thanks @KaulSe
 - Refactored Betfair order matching to use `rfo` as primary key
 - Refactored Deribit WS client to use standard Nautilus method names (#3418), thanks @filipmacek
+- Refactored dYdX v4 execution client in Rust (#3477), thanks @filipmacek
+- Refactored Kraken spot quotes to use dedicated Ticker channel
 - Refactored Polymarket WebSocket to multi-client pool pattern
+- Improved `cancel_all_orders` to include inflight orders
 - Improved pnl FX conversions in portfolio (#3335), thanks @faysou
 - Improved live timers to use `BTreeMap` for storage (#3392), thanks @faysou
 - Improved checks before writing data in catalog._write_chunk (#3411), thanks @faysou

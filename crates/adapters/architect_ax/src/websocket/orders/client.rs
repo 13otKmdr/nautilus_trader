@@ -46,7 +46,10 @@ use ustr::Ustr;
 
 use super::handler::{FeedHandler, HandlerCommand, WsOrderInfo};
 use crate::{
-    common::enums::{AxOrderSide, AxOrderType, AxTimeInForce},
+    common::{
+        enums::{AxOrderSide, AxOrderType, AxTimeInForce},
+        parse::quantity_to_contracts,
+    },
     websocket::messages::{AxOrdersWsMessage, AxWsPlaceOrder, OrderMetadata},
 };
 
@@ -246,7 +249,7 @@ impl AxOrdersWebSocketClient {
         }
 
         // Required for correct precision on fills
-        let symbol = Ustr::from(instrument_id.symbol.as_str());
+        let symbol = instrument_id.symbol.inner();
         let Some(instrument) = self.get_cached_instrument(&symbol) else {
             log::warn!(
                 "Cannot register external order {client_order_id}: \
@@ -589,7 +592,7 @@ impl AxOrdersWebSocketClient {
         }
 
         // Get instrument from cache for precision
-        let symbol = Ustr::from(instrument_id.symbol.as_str());
+        let symbol = instrument_id.symbol.inner();
         let instrument = self.get_cached_instrument(&symbol).ok_or_else(|| {
             AxOrdersWsClientError::ClientError(format!(
                 "Instrument {instrument_id} not found in cache"
@@ -615,8 +618,8 @@ impl AxOrdersWebSocketClient {
             AxOrdersWsClientError::ClientError(format!("Invalid order side: {order_side:?}"))
         })?;
 
-        // AX uses i64 contracts directly (not minor units)
-        let qty_contracts = quantity.as_f64() as i64;
+        let qty_contracts = quantity_to_contracts(quantity)
+            .map_err(|e| AxOrdersWsClientError::ClientError(e.to_string()))?;
 
         // Store order metadata for event correlation
         let metadata = OrderMetadata {
