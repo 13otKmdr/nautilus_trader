@@ -24,11 +24,16 @@ from nautilus_trader.adapters.binance.common.enums import BinanceAccountType
 from nautilus_trader.adapters.binance.common.enums import BinanceEnumParser
 from nautilus_trader.adapters.binance.common.enums import BinanceErrorCode
 from nautilus_trader.adapters.binance.common.enums import BinanceKlineInterval
+from nautilus_trader.adapters.binance.common.schemas.market import BinanceAggregatedTradeData
 from nautilus_trader.adapters.binance.common.schemas.market import BinanceAggregatedTradeMsg
+from nautilus_trader.adapters.binance.common.schemas.market import BinanceCandlestickData
 from nautilus_trader.adapters.binance.common.schemas.market import BinanceCandlestickMsg
 from nautilus_trader.adapters.binance.common.schemas.market import BinanceDataMsgWrapper
+from nautilus_trader.adapters.binance.common.schemas.market import BinanceOrderBookData
 from nautilus_trader.adapters.binance.common.schemas.market import BinanceOrderBookMsg
+from nautilus_trader.adapters.binance.common.schemas.market import BinanceQuoteData
 from nautilus_trader.adapters.binance.common.schemas.market import BinanceQuoteMsg
+from nautilus_trader.adapters.binance.common.schemas.market import BinanceTickerData
 from nautilus_trader.adapters.binance.common.schemas.market import BinanceTickerMsg
 from nautilus_trader.adapters.binance.common.symbol import BinanceSymbol
 from nautilus_trader.adapters.binance.common.types import BinanceBar
@@ -216,11 +221,11 @@ class BinanceCommonDataClient(LiveMarketDataClient):
 
         # WebSocket msgspec decoders
         self._decoder_data_msg_wrapper = msgspec.json.Decoder(BinanceDataMsgWrapper)
-        self._decoder_order_book_msg = msgspec.json.Decoder(BinanceOrderBookMsg)
-        self._decoder_quote_msg = msgspec.json.Decoder(BinanceQuoteMsg)
-        self._decoder_ticker_msg = msgspec.json.Decoder(BinanceTickerMsg)
-        self._decoder_candlestick_msg = msgspec.json.Decoder(BinanceCandlestickMsg)
-        self._decoder_agg_trade_msg = msgspec.json.Decoder(BinanceAggregatedTradeMsg)
+        self._decoder_order_book_data = msgspec.json.Decoder(BinanceOrderBookData)
+        self._decoder_quote_data = msgspec.json.Decoder(BinanceQuoteData)
+        self._decoder_ticker_data = msgspec.json.Decoder(BinanceTickerData)
+        self._decoder_candlestick_data = msgspec.json.Decoder(BinanceCandlestickData)
+        self._decoder_agg_trade_data = msgspec.json.Decoder(BinanceAggregatedTradeData)
 
         # Retry logic (hardcoded for now)
         self._max_retries: int = 3
@@ -940,8 +945,8 @@ class BinanceCommonDataClient(LiveMarketDataClient):
 
             handled = False
             for handler in self._ws_handlers:
-                if handler in wrapper.stream:
-                    self._ws_handlers[handler](raw)
+                if handler in wrapper.stream and wrapper.data is not None:
+                    self._ws_handlers[handler](wrapper)
                     handled = True
             if not handled:
                 self._log.error(
@@ -950,10 +955,10 @@ class BinanceCommonDataClient(LiveMarketDataClient):
         except Exception as e:
             self._log.exception(f"Error handling websocket message {raw!r}", e)
 
-    def _handle_book_diff_update(self, raw: bytes) -> None:
-        msg = self._decoder_order_book_msg.decode(raw)
-        instrument_id: InstrumentId = self._get_cached_instrument_id(msg.data.s)
-        book_deltas: OrderBookDeltas = msg.data.parse_to_order_book_deltas(
+    def _handle_book_diff_update(self, wrapper: BinanceDataMsgWrapper) -> None:
+        data = self._decoder_order_book_data.decode(wrapper.data)
+        instrument_id: InstrumentId = self._get_cached_instrument_id(data.s)
+        book_deltas: OrderBookDeltas = data.parse_to_order_book_deltas(
             instrument_id=instrument_id,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -966,19 +971,19 @@ class BinanceCommonDataClient(LiveMarketDataClient):
 
         self._handle_data(book_deltas)
 
-    def _handle_book_ticker(self, raw: bytes) -> None:
-        msg = self._decoder_quote_msg.decode(raw)
-        instrument_id: InstrumentId = self._get_cached_instrument_id(msg.data.s)
-        quote_tick: QuoteTick = msg.data.parse_to_quote_tick(
+    def _handle_book_ticker(self, wrapper: BinanceDataMsgWrapper) -> None:
+        data = self._decoder_quote_data.decode(wrapper.data)
+        instrument_id: InstrumentId = self._get_cached_instrument_id(data.s)
+        quote_tick: QuoteTick = data.parse_to_quote_tick(
             instrument_id=instrument_id,
             ts_init=self._clock.timestamp_ns(),
         )
         self._handle_data(quote_tick)
 
-    def _handle_ticker(self, raw: bytes) -> None:
-        msg = self._decoder_ticker_msg.decode(raw)
-        instrument_id: InstrumentId = self._get_cached_instrument_id(msg.data.s)
-        ticker: BinanceTicker = msg.data.parse_to_binance_ticker(
+    def _handle_ticker(self, wrapper: BinanceDataMsgWrapper) -> None:
+        data = self._decoder_ticker_data.decode(wrapper.data)
+        instrument_id: InstrumentId = self._get_cached_instrument_id(data.s)
+        ticker: BinanceTicker = data.parse_to_binance_ticker(
             instrument_id=instrument_id,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -989,28 +994,28 @@ class BinanceCommonDataClient(LiveMarketDataClient):
         custom = CustomData(data_type=data_type, data=ticker)
         self._handle_data(custom)
 
-    def _handle_kline(self, raw: bytes) -> None:
-        msg = self._decoder_candlestick_msg.decode(raw)
-        if not msg.data.k.x:
+    def _handle_kline(self, wrapper: BinanceDataMsgWrapper) -> None:
+        data = self._decoder_candlestick_data.decode(wrapper.data)
+        if not data.k.x:
             return  # Not closed yet
-        instrument_id = self._get_cached_instrument_id(msg.data.s)
-        bar: BinanceBar = msg.data.k.parse_to_binance_bar(
+        instrument_id = self._get_cached_instrument_id(data.s)
+        bar: BinanceBar = data.k.parse_to_binance_bar(
             instrument_id=instrument_id,
             enum_parser=self._enum_parser,
             ts_init=self._clock.timestamp_ns(),
         )
         self._handle_data(bar)
 
-    def _handle_book_partial_update(self, raw: bytes) -> None:
+    def _handle_book_partial_update(self, wrapper: BinanceDataMsgWrapper) -> None:
         raise NotImplementedError("Please implement book partial update handling in child class.")
 
-    def _handle_trade(self, raw: bytes) -> None:
+    def _handle_trade(self, wrapper: BinanceDataMsgWrapper) -> None:
         raise NotImplementedError("Please implement trade handling in child class.")
 
-    def _handle_agg_trade(self, raw: bytes) -> None:
-        msg = self._decoder_agg_trade_msg.decode(raw)
-        instrument_id: InstrumentId = self._get_cached_instrument_id(msg.data.s)
-        trade_tick: TradeTick = msg.data.parse_to_trade_tick(
+    def _handle_agg_trade(self, wrapper: BinanceDataMsgWrapper) -> None:
+        data = self._decoder_agg_trade_data.decode(wrapper.data)
+        instrument_id: InstrumentId = self._get_cached_instrument_id(data.s)
+        trade_tick: TradeTick = data.parse_to_trade_tick(
             instrument_id=instrument_id,
             ts_init=self._clock.timestamp_ns(),
         )

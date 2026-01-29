@@ -349,6 +349,7 @@ class BinanceDataMsgWrapper(msgspec.Struct):
 
     stream: str | None = None
     id: int | None = None
+    data: msgspec.Raw = None
 
 
 class BinanceOrderBookDelta(msgspec.Struct, array_like=True):

@@ -23,6 +23,9 @@ from nautilus_trader.adapters.binance.data import BinanceCommonDataClient
 from nautilus_trader.adapters.binance.http.client import BinanceHttpClient
 from nautilus_trader.adapters.binance.spot.enums import BinanceSpotEnumParser
 from nautilus_trader.adapters.binance.spot.http.market import BinanceSpotMarketHttpAPI
+from nautilus_trader.adapters.binance.common.schemas.market import BinanceDataMsgWrapper
+from nautilus_trader.adapters.binance.spot.schemas.market import BinanceSpotOrderBookPartialDepthData
+from nautilus_trader.adapters.binance.spot.schemas.market import BinanceSpotTradeData
 from nautilus_trader.adapters.binance.spot.schemas.market import BinanceSpotOrderBookPartialDepthMsg
 from nautilus_trader.adapters.binance.spot.schemas.market import BinanceSpotTradeMsg
 from nautilus_trader.cache.cache import Cache
@@ -105,19 +108,19 @@ class BinanceSpotDataClient(BinanceCommonDataClient):
         )
 
         # Websocket msgspec decoders
-        self._decoder_spot_trade = msgspec.json.Decoder(BinanceSpotTradeMsg)
+        self._decoder_spot_trade = msgspec.json.Decoder(BinanceSpotTradeData)
         self._decoder_spot_order_book_partial_depth = msgspec.json.Decoder(
-            BinanceSpotOrderBookPartialDepthMsg,
+            BinanceSpotOrderBookPartialDepthData,
         )
 
     # -- WEBSOCKET HANDLERS ---------------------------------------------------------------------------------
 
-    def _handle_book_partial_update(self, raw: bytes) -> None:
-        msg = self._decoder_spot_order_book_partial_depth.decode(raw)
+    def _handle_book_partial_update(self, wrapper: BinanceDataMsgWrapper) -> None:
+        data = self._decoder_spot_order_book_partial_depth.decode(wrapper.data)
         instrument_id: InstrumentId = self._get_cached_instrument_id(
-            msg.stream.partition("@")[0],
+            wrapper.stream.partition("@")[0],
         )
-        book_snapshot: OrderBookDeltas = msg.data.parse_to_order_book_snapshot(
+        book_snapshot: OrderBookDeltas = data.parse_to_order_book_snapshot(
             instrument_id=instrument_id,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -130,10 +133,10 @@ class BinanceSpotDataClient(BinanceCommonDataClient):
         else:
             self._handle_data(book_snapshot)
 
-    def _handle_trade(self, raw: bytes) -> None:
-        msg = self._decoder_spot_trade.decode(raw)
-        instrument_id: InstrumentId = self._get_cached_instrument_id(msg.data.s)
-        trade_tick: TradeTick = msg.data.parse_to_trade_tick(
+    def _handle_trade(self, wrapper: BinanceDataMsgWrapper) -> None:
+        data = self._decoder_spot_trade.decode(wrapper.data)
+        instrument_id: InstrumentId = self._get_cached_instrument_id(data.s)
+        trade_tick: TradeTick = data.parse_to_trade_tick(
             instrument_id=instrument_id,
             ts_init=self._clock.timestamp_ns(),
         )
