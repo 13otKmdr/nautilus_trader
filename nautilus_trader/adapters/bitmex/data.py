@@ -313,17 +313,17 @@ class BitmexDataClient(LiveMarketDataClient):
         )
 
     async def _request_instrument(self, request: RequestInstrument) -> None:
-        instruments = await self._http_client.request_instruments(self._active_only)
-        for instrument in instruments:
-            if instrument.id == request.instrument_id:
-                self._handle_instrument(instrument)
-                self._send_response(
-                    msg_type=type(request),
-                    correlation_id=request.id,
-                )
-                return
+        pyo3_instrument_id = nautilus_pyo3.InstrumentId.from_str(request.instrument_id.value)
+        instrument = await self._http_client.request_instrument(pyo3_instrument_id)
 
-        self._log.warning(f"Instrument {request.instrument_id} not found")
+        if instrument is not None:
+            self._handle_instrument(instrument)
+            self._send_response(
+                msg_type=type(request),
+                correlation_id=request.id,
+            )
+        else:
+            self._log.warning(f"Instrument {request.instrument_id} not found")
 
     async def _request_trade_ticks(self, request: RequestTradeTicks) -> None:
         limit = request.limit or None
