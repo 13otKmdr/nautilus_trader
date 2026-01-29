@@ -98,9 +98,16 @@ use crate::{
     grpc::{DydxGrpcClient, SHORT_TERM_ORDER_MAXIMUM_LIFETIME, types::ChainId},
     http::{
         client::DydxHttpClient,
-        parse::{parse_http_account_state, parse_position_status_report},
+        parse::{
+            parse_account_state, parse_fill_report, parse_http_account_state,
+            parse_order_status_report, parse_position_status_report,
+        },
     },
-    websocket::{client::DydxWebSocketClient, enums::NautilusWsMessage},
+    websocket::{
+        client::DydxWebSocketClient,
+        enums::NautilusWsMessage,
+        parse::{parse_ws_fill_report, parse_ws_order_report, parse_ws_position_report},
+    },
 };
 
 pub mod block_time;
@@ -169,9 +176,6 @@ pub struct DydxExecutionClient {
     /// Order message builder for creating dYdX proto messages.
     /// Wrapped in Arc for sharing with async order tasks.
     order_builder: Option<Arc<OrderMessageBuilder>>,
-    started: bool,
-    connected: bool,
-    instruments_initialized: bool,
     ws_stream_handle: Option<JoinHandle<()>>,
     pending_tasks: Mutex<Vec<JoinHandle<()>>>,
 }
@@ -256,9 +260,6 @@ impl DydxExecutionClient {
             tx_manager: None,
             broadcaster: None,
             order_builder: None,
-            started: false,
-            connected: false,
-            instruments_initialized: false,
             ws_stream_handle: None,
             pending_tasks: Mutex::new(Vec::new()),
         })
@@ -525,7 +526,7 @@ impl DydxExecutionClient {
     /// populated by the HTTP client during `fetch_and_cache_instruments()`.
     fn mark_instruments_initialized(&mut self) {
         let count = self.instrument_cache.len();
-        self.instruments_initialized = true;
+        self.core.set_instruments_initialized();
         log::debug!("Instruments initialized: {count} instruments in shared cache");
     }
 
@@ -700,7 +701,7 @@ impl DydxExecutionClient {
 #[async_trait(?Send)]
 impl ExecutionClient for DydxExecutionClient {
     fn is_connected(&self) -> bool {
-        self.connected
+        self.core.is_connected()
     }
 
     fn client_id(&self) -> ClientId {
@@ -736,7 +737,7 @@ impl ExecutionClient for DydxExecutionClient {
     }
 
     fn start(&mut self) -> anyhow::Result<()> {
-        if self.started {
+        if self.core.is_started() {
             log::warn!("dYdX execution client already started");
             return Ok(());
         }
@@ -744,20 +745,20 @@ impl ExecutionClient for DydxExecutionClient {
         let sender = get_exec_event_sender();
         self.emitter.set_sender(sender);
         log::info!("Starting dYdX execution client");
-        self.started = true;
+        self.core.set_started();
         Ok(())
     }
 
     fn stop(&mut self) -> anyhow::Result<()> {
-        if !self.started {
+        if self.core.is_stopped() {
             log::warn!("dYdX execution client not started");
             return Ok(());
         }
 
         log::info!("Stopping dYdX execution client");
         self.abort_pending_tasks();
-        self.started = false;
-        self.connected = false;
+        self.core.set_stopped();
+        self.core.set_disconnected();
         Ok(())
     }
 
@@ -2332,7 +2333,7 @@ impl ExecutionClient for DydxExecutionClient {
     }
 
     async fn connect(&mut self) -> anyhow::Result<()> {
-        if self.connected {
+        if self.core.is_connected() {
             log::warn!("dYdX execution client already connected");
             return Ok(());
         }
@@ -2559,7 +2560,7 @@ impl ExecutionClient for DydxExecutionClient {
                                 let ts_init = clock.get_time_ns();
                                 let ts_event = ts_init;
 
-                                match crate::http::parse::parse_account_state(
+                                match parse_account_state(
                                     &msg.contents.subaccount,
                                     account_id,
                                     &inst_map,
@@ -2590,7 +2591,7 @@ impl ExecutionClient for DydxExecutionClient {
                                     );
 
                                     for (market, ws_position) in positions {
-                                        match crate::websocket::parse::parse_ws_position_report(
+                                        match parse_ws_position_report(
                                             ws_position,
                                             &instrument_cache,
                                             account_id,
@@ -2632,7 +2633,7 @@ impl ExecutionClient for DydxExecutionClient {
                                             ws_order.status,
                                             ws_order.client_id
                                         );
-                                        match crate::websocket::parse::parse_ws_order_report(
+                                        match parse_ws_order_report(
                                             ws_order,
                                             &instrument_cache,
                                             &order_contexts,
@@ -2662,7 +2663,7 @@ impl ExecutionClient for DydxExecutionClient {
                                 // Process fills
                                 if let Some(ref fills) = data.contents.fills {
                                     for ws_fill in fills {
-                                        match crate::websocket::parse::parse_ws_fill_report(
+                                        match parse_ws_fill_report(
                                             ws_fill,
                                             &instrument_cache,
                                             account_id,
@@ -2744,13 +2745,13 @@ impl ExecutionClient for DydxExecutionClient {
             log::error!("Failed to take WebSocket receiver - no messages will be processed");
         }
 
-        self.connected = true;
+        self.core.set_connected();
         log::info!("Connected: client_id={}", self.core.client_id);
         Ok(())
     }
 
     async fn disconnect(&mut self) -> anyhow::Result<()> {
-        if !self.connected {
+        if self.core.is_disconnected() {
             log::warn!("dYdX execution client not connected");
             return Ok(());
         }
@@ -2790,7 +2791,7 @@ impl ExecutionClient for DydxExecutionClient {
         // Abort any pending tasks
         self.abort_pending_tasks();
 
-        self.connected = false;
+        self.core.set_disconnected();
         log::info!("Disconnected: client_id={}", self.core.client_id);
         Ok(())
     }
@@ -2824,13 +2825,8 @@ impl ExecutionClient for DydxExecutionClient {
             None => return Ok(None),
         };
 
-        let report = crate::http::parse::parse_order_status_report(
-            order,
-            &instrument,
-            self.core.account_id,
-            ts_init,
-        )
-        .context("failed to parse order status report")?;
+        let report = parse_order_status_report(order, &instrument, self.core.account_id, ts_init)
+            .context("failed to parse order status report")?;
 
         if let Some(client_order_id) = cmd.client_order_id
             && report.client_order_id != Some(client_order_id)
@@ -2885,18 +2881,15 @@ impl ExecutionClient for DydxExecutionClient {
                 continue;
             }
 
-            let report = match crate::http::parse::parse_order_status_report(
-                &order,
-                &instrument,
-                self.core.account_id,
-                ts_init,
-            ) {
-                Ok(r) => r,
-                Err(e) => {
-                    log::warn!("Failed to parse order status report: {e}");
-                    continue;
-                }
-            };
+            let report =
+                match parse_order_status_report(&order, &instrument, self.core.account_id, ts_init)
+                {
+                    Ok(r) => r,
+                    Err(e) => {
+                        log::warn!("Failed to parse order status report: {e}");
+                        continue;
+                    }
+                };
 
             reports.push(report);
         }
@@ -2951,12 +2944,8 @@ impl ExecutionClient for DydxExecutionClient {
                 continue;
             }
 
-            let report = match crate::http::parse::parse_fill_report(
-                &fill,
-                &instrument,
-                self.core.account_id,
-                ts_init,
-            ) {
+            let report = match parse_fill_report(&fill, &instrument, self.core.account_id, ts_init)
+            {
                 Ok(r) => r,
                 Err(e) => {
                     log::warn!("Failed to parse fill report: {e}");
@@ -3004,7 +2993,7 @@ impl ExecutionClient for DydxExecutionClient {
                 continue;
             }
 
-            let report = match crate::http::parse::parse_position_status_report(
+            let report = match parse_position_status_report(
                 perp_position,
                 &instrument,
                 self.core.account_id,
@@ -3065,12 +3054,7 @@ impl ExecutionClient for DydxExecutionClient {
                 }
             };
 
-            match crate::http::parse::parse_order_status_report(
-                &order,
-                &instrument,
-                self.core.account_id,
-                ts_init,
-            ) {
+            match parse_order_status_report(&order, &instrument, self.core.account_id, ts_init) {
                 Ok(r) => order_reports.push(r),
                 Err(e) => {
                     log::warn!("Failed to parse order status report: {e}");
@@ -3114,12 +3098,7 @@ impl ExecutionClient for DydxExecutionClient {
                 }
             };
 
-            match crate::http::parse::parse_fill_report(
-                &fill,
-                &instrument,
-                self.core.account_id,
-                ts_init,
-            ) {
+            match parse_fill_report(&fill, &instrument, self.core.account_id, ts_init) {
                 Ok(r) => fill_reports.push(r),
                 Err(e) => {
                     log::warn!("Failed to parse fill report: {e}");
