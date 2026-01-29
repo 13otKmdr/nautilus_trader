@@ -1374,6 +1374,8 @@ class InteractiveBrokersExecutionClient(LiveExecutionClient):
         order: Order,
         ib_order: IBOrder | None = None,
         reason: str = "",
+        filled_qty: Decimal | None = None,
+        venue_order_id: VenueOrderId | None = None,
     ) -> None:
         if status == OrderStatus.SUBMITTED:
             self.generate_order_submitted(
@@ -1402,8 +1404,50 @@ class InteractiveBrokersExecutionClient(LiveExecutionClient):
                 self._log.debug(f"Order {order.client_order_id} already accepted")
         elif status == OrderStatus.FILLED:
             if order.status != OrderStatus.FILLED:
-                # TODO: self.generate_order_filled
-                self._log.debug(f"Order {order.client_order_id} is filled")
+                # Calculate fill quantity
+                if filled_qty is not None:
+                    last_qty = filled_qty - order.filled_qty.as_decimal()
+                else:
+                    last_qty = order.quantity.as_decimal() - order.filled_qty.as_decimal()
+
+                # Ignore zero/negative quantity fills (could be already filled or duplicate event)
+                if last_qty <= 0:
+                    self._log.debug(f"Order {order.client_order_id} is filled (no quantity change)")
+                    return
+
+                # Get price for fill (use average fill price if available, otherwise order price)
+                last_px = self._order_avg_prices.get(order.client_order_id)
+                instrument = self._cache.instrument(order.instrument_id)
+
+                if last_px is None:
+                    if order.price:
+                        last_px = order.price
+                    else:
+                        # Fallback for market orders if avg price not available
+                        self._log.warning(
+                            f"Order {order.client_order_id} filled but no price available; using 0.0",
+                        )
+                        last_px = instrument.make_price(0.0)
+
+                # Generate a fill event
+                self.generate_order_filled(
+                    strategy_id=order.strategy_id,
+                    instrument_id=order.instrument_id,
+                    client_order_id=order.client_order_id,
+                    venue_order_id=venue_order_id or order.venue_order_id,
+                    venue_position_id=None,
+                    trade_id=TradeId(UUID4()),  # Synthetic trade ID
+                    order_side=order.side,
+                    order_type=order.order_type,
+                    last_qty=instrument.make_qty(last_qty),
+                    last_px=last_px,
+                    quote_currency=instrument.quote_currency,
+                    commission=Money(0, instrument.quote_currency),  # Unknown commission
+                    liquidity_side=LiquiditySide.NO_LIQUIDITY_SIDE,
+                    ts_event=self._clock.timestamp_ns(),
+                    info={"reason": "Synthesized from IB OrderStatus.FILLED"},
+                )
+                self._log.debug(f"Order {order.client_order_id} is filled (synthesized fill)")
         elif status == OrderStatus.PENDING_CANCEL:
             # TODO: self.generate_order_pending_cancel
             self._log.warning(f"Order {order.client_order_id} is {status.name}")
@@ -1581,6 +1625,8 @@ class InteractiveBrokersExecutionClient(LiveExecutionClient):
                 status=status,
                 order=nautilus_order,
                 reason=reason,
+                filled_qty=filled,
+                venue_order_id=venue_order_id,
             )
 
             if venue_order_id is not None and status in (
