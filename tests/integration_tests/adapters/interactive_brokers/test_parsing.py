@@ -560,7 +560,7 @@ def test_activation_date_calculation():
     # Case 2: Fallback (Long dated)
     details_3 = IBTestContractStubs.cl_future_contract_details()
     # Set expiration to 2 years from now
-    expiry_dt = pd.Timestamp.now("UTC").floor("D") + pd.Timedelta(days=730)
+    expiry_dt = pd.Timestamp("2030-01-01", tz="UTC")
     details_3.contract.lastTradeDateOrContractMonth = expiry_dt.strftime("%Y%m%d")
     details_3.tradingHours = "CLOSED"  # Invalid trading hours for parsing start
     details_3.issueDate = ""
