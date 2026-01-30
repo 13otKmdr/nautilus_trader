@@ -241,12 +241,27 @@ class PolymarketInstrumentProvider(InstrumentProvider):
     ) -> None:
         filter_is_active = filters.get("is_active", False) if filters else False
 
-        for instrument_id in instrument_ids:
-            response: dict[str, Any] | str = await asyncio.to_thread(
+        tasks = [
+            asyncio.to_thread(
                 self._client.get_market,
                 condition_id=get_polymarket_condition_id(instrument_id),
             )
-            response = _check_clob_response(response)
+            for instrument_id in instrument_ids
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for i, response in enumerate(results):
+            instrument_id = instrument_ids[i]
+
+            if isinstance(response, BaseException):
+                self._log.error(f"Failed to load instrument {instrument_id}: {response}")
+                continue
+
+            try:
+                response = _check_clob_response(response)
+            except Exception as e:
+                self._log.error(f"Failed to check CLOB response for {instrument_id}: {e}")
+                continue
 
             try:
                 active = response["active"]
