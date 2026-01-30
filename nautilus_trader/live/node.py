@@ -477,7 +477,7 @@ class TradingNode:
                 if current_loop is loop:
                     raise RuntimeError(
                         "Cannot call synchronous `dispose` from the event loop thread. "
-                        "Use `await node.dispose_async()` instead."
+                        "Use `await node.dispose_async()` instead.",
                     )
 
                 try:
