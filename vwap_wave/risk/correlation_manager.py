@@ -11,10 +11,6 @@ of risk in a single market direction.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Set
 
 from vwap_wave.config.instruments import CORRELATION_GROUPS
 from vwap_wave.config.instruments import get_correlation_group
@@ -27,8 +23,8 @@ class CorrelationState:
 
     total_long_exposure: int
     total_short_exposure: int
-    group_exposures: Dict[str, Dict[str, int]]  # group -> {"long": n, "short": n}
-    correlated_symbols: List[str]
+    group_exposures: dict[str, dict[str, int]]  # group -> {"long": n, "short": n}
+    correlated_symbols: list[str]
 
 
 @dataclass
@@ -37,7 +33,7 @@ class OpenPosition:
 
     symbol: str
     direction: str  # "long" or "short"
-    correlation_group: Optional[str]
+    correlation_group: str | None
 
 
 class CorrelationManager:
@@ -56,7 +52,7 @@ class CorrelationManager:
 
     def __init__(self, config: RiskConfig):
         self.config = config
-        self._open_positions: Dict[str, OpenPosition] = {}
+        self._open_positions: dict[str, OpenPosition] = {}
         self._correlation_groups = CORRELATION_GROUPS
 
     def register_position(self, symbol: str, direction: str) -> None:
@@ -150,7 +146,7 @@ class CorrelationManager:
         """
         return self.get_adjustment(symbol, direction) > 0
 
-    def get_correlated_symbols(self, symbol: str) -> List[str]:
+    def get_correlated_symbols(self, symbol: str) -> list[str]:
         """
         Get all symbols correlated with the given symbol.
 
@@ -171,7 +167,7 @@ class CorrelationManager:
 
         return [s for s in self._correlation_groups.get(correlation_group, []) if s != symbol]
 
-    def get_open_correlated_positions(self, symbol: str) -> List[OpenPosition]:
+    def get_open_correlated_positions(self, symbol: str) -> list[OpenPosition]:
         """
         Get open positions in the same correlation group.
 
@@ -202,7 +198,7 @@ class CorrelationManager:
         total_long = sum(1 for p in self._open_positions.values() if p.direction == "long")
         total_short = sum(1 for p in self._open_positions.values() if p.direction == "short")
 
-        group_exposures: Dict[str, Dict[str, int]] = {}
+        group_exposures: dict[str, dict[str, int]] = {}
         for group_name in self._correlation_groups:
             long_count = sum(
                 1
@@ -217,7 +213,7 @@ class CorrelationManager:
             if long_count > 0 or short_count > 0:
                 group_exposures[group_name] = {"long": long_count, "short": short_count}
 
-        all_correlated: Set[str] = set()
+        all_correlated: set[str] = set()
         for pos in self._open_positions.values():
             if pos.correlation_group:
                 all_correlated.update(self._correlation_groups.get(pos.correlation_group, []))

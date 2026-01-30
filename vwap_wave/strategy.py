@@ -12,8 +12,6 @@ volume confirmation.
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import List
-from typing import Optional
 
 import pandas as pd
 
@@ -32,7 +30,6 @@ from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.model.objects import Quantity
 from nautilus_trader.model.position import Position
 from nautilus_trader.trading.strategy import Strategy
-
 from vwap_wave.analysis.acceptance import AcceptanceEngine
 from vwap_wave.analysis.exhaustion import ExhaustionEngine
 from vwap_wave.analysis.regime_classifier import MarketRegime
@@ -83,7 +80,7 @@ class VWAPWaveStrategyConfig(StrategyConfig, frozen=True):
 
     instrument_id: InstrumentId
     bar_type: BarType
-    vwap_wave_config: Optional[VWAPWaveConfig] = None
+    vwap_wave_config: VWAPWaveConfig | None = None
     atr_period: int = 14
     volume_ma_period: int = 20
     request_bars: bool = True
@@ -114,39 +111,39 @@ class VWAPWaveStrategy(Strategy):
         self._vwap_config = config.vwap_wave_config or VWAPWaveConfig()
 
         # Instrument
-        self.instrument: Optional[Instrument] = None
+        self.instrument: Instrument | None = None
 
         # Built-in indicators
         self.atr = AverageTrueRange(config.atr_period)
 
         # Core components (initialized in on_start)
-        self.vwap_engine: Optional[VWAPEngine] = None
-        self.ib_tracker: Optional[InitialBalanceTracker] = None
-        self.cvd_calculator: Optional[CVDCalculator] = None
-        self.volume_profile: Optional[VolumeProfileBuilder] = None
+        self.vwap_engine: VWAPEngine | None = None
+        self.ib_tracker: InitialBalanceTracker | None = None
+        self.cvd_calculator: CVDCalculator | None = None
+        self.volume_profile: VolumeProfileBuilder | None = None
 
         # Analysis components
-        self.acceptance_engine: Optional[AcceptanceEngine] = None
-        self.rejection_engine: Optional[RejectionEngine] = None
-        self.exhaustion_engine: Optional[ExhaustionEngine] = None
-        self.regime_classifier: Optional[RegimeClassifier] = None
+        self.acceptance_engine: AcceptanceEngine | None = None
+        self.rejection_engine: RejectionEngine | None = None
+        self.exhaustion_engine: ExhaustionEngine | None = None
+        self.regime_classifier: RegimeClassifier | None = None
 
         # Setups
-        self.setups: List[BaseSetup] = []
+        self.setups: list[BaseSetup] = []
 
         # Risk management
-        self.position_sizer: Optional[PositionSizer] = None
-        self.drawdown_manager: Optional[DrawdownManager] = None
-        self.correlation_manager: Optional[CorrelationManager] = None
-        self.trade_manager: Optional[TradeManager] = None
+        self.position_sizer: PositionSizer | None = None
+        self.drawdown_manager: DrawdownManager | None = None
+        self.correlation_manager: CorrelationManager | None = None
+        self.trade_manager: TradeManager | None = None
 
         # Order factory wrapper
-        self._order_factory: Optional[VWAPWaveOrderFactory] = None
+        self._order_factory: VWAPWaveOrderFactory | None = None
 
         # State
-        self._volume_history: List[float] = []
-        self._current_regime: Optional[RegimeState] = None
-        self._last_regime: Optional[MarketRegime] = None
+        self._volume_history: list[float] = []
+        self._current_regime: RegimeState | None = None
+        self._last_regime: MarketRegime | None = None
 
     def on_start(self) -> None:
         """Initialize all components when strategy starts."""
@@ -514,7 +511,7 @@ class VWAPWaveStrategy(Strategy):
 
     def on_position_closed(self, event: PositionClosed) -> None:
         """Handle position closed events."""
-        trade = self.trade_manager.on_close(event.position_id)
+        self.trade_manager.on_close(event.position_id)
 
         # Unregister correlation exposure
         symbol = str(self.config.instrument_id)
@@ -542,6 +539,13 @@ class VWAPWaveStrategy(Strategy):
         # Reset indicators
         self.atr.reset()
 
+        self._reset_components()
+
+        self._volume_history.clear()
+        self._current_regime = None
+        self._last_regime = None
+
+    def _reset_components(self) -> None:
         if self.vwap_engine:
             self.vwap_engine.reset()
         if self.ib_tracker:
@@ -570,10 +574,5 @@ class VWAPWaveStrategy(Strategy):
         if self.correlation_manager:
             self.correlation_manager.reset()
 
-        self._volume_history.clear()
-        self._current_regime = None
-        self._last_regime = None
-
     def on_dispose(self) -> None:
         """Cleanup any resources used by the strategy."""
-        pass

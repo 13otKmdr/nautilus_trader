@@ -5,10 +5,7 @@
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from vwap_wave.analysis.acceptance import AcceptanceEngine
-from vwap_wave.analysis.acceptance import AcceptanceResult
 from vwap_wave.analysis.acceptance import AcceptanceType
 from vwap_wave.analysis.acceptance import Direction
 from vwap_wave.config.settings import AcceptanceConfig

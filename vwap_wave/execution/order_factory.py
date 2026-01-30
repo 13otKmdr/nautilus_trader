@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import TYPE_CHECKING
-from typing import List
-from typing import Optional
 
 from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.enums import TimeInForce
@@ -20,7 +18,6 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
 from nautilus_trader.model.orders import MarketOrder
-
 from vwap_wave.setups.base_setup import SetupSignal
 from vwap_wave.setups.base_setup import TradeDirection
 

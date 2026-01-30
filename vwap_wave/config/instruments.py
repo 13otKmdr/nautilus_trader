@@ -10,8 +10,6 @@ parameter settings due to their unique volatility and liquidity characteristics.
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Dict
-from typing import Optional
 
 from vwap_wave.config.settings import AcceptanceConfig
 from vwap_wave.config.settings import ExhaustionConfig
@@ -27,16 +25,16 @@ class InstrumentOverrides:
     """Instrument-specific configuration overrides."""
 
     symbol: str
-    vwap: Optional[VWAPConfig] = None
-    ib: Optional[InitialBalanceConfig] = None
-    acceptance: Optional[AcceptanceConfig] = None
-    exhaustion: Optional[ExhaustionConfig] = None
-    risk: Optional[RiskConfig] = None
-    trade_mgmt: Optional[TradeManagementConfig] = None
+    vwap: VWAPConfig | None = None
+    ib: InitialBalanceConfig | None = None
+    acceptance: AcceptanceConfig | None = None
+    exhaustion: ExhaustionConfig | None = None
+    risk: RiskConfig | None = None
+    trade_mgmt: TradeManagementConfig | None = None
 
 
 # Forex Major Pairs - Lower volatility, tighter ranges
-FOREX_MAJORS: Dict[str, InstrumentOverrides] = {
+FOREX_MAJORS: dict[str, InstrumentOverrides] = {
     "EUR/USD": InstrumentOverrides(
         symbol="EUR/USD",
         acceptance=AcceptanceConfig(
@@ -88,7 +86,7 @@ FOREX_MAJORS: Dict[str, InstrumentOverrides] = {
 
 
 # Crypto Pairs - Higher volatility, wider ranges
-CRYPTO_PAIRS: Dict[str, InstrumentOverrides] = {
+CRYPTO_PAIRS: dict[str, InstrumentOverrides] = {
     "BTC/USDT": InstrumentOverrides(
         symbol="BTC/USDT",
         vwap=VWAPConfig(
@@ -198,7 +196,7 @@ def get_instrument_config(symbol: str, base_config: VWAPWaveConfig) -> VWAPWaveC
 
 
 # Correlation groups for risk management
-CORRELATION_GROUPS: Dict[str, list] = {
+CORRELATION_GROUPS: dict[str, list] = {
     "USD_PAIRS": ["EUR/USD", "GBP/USD", "USD/JPY", "USD/CHF", "AUD/USD", "NZD/USD"],
     "EUR_CROSSES": ["EUR/GBP", "EUR/JPY", "EUR/CHF", "EUR/AUD"],
     "BTC_CORRELATED": ["BTC/USDT", "ETH/USDT", "SOL/USDT", "AVAX/USDT"],
@@ -206,7 +204,7 @@ CORRELATION_GROUPS: Dict[str, list] = {
 }
 
 
-def get_correlation_group(symbol: str) -> Optional[str]:
+def get_correlation_group(symbol: str) -> str | None:
     """Get the correlation group for an instrument."""
     for group_name, symbols in CORRELATION_GROUPS.items():
         if symbol in symbols:

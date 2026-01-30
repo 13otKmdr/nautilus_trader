@@ -13,10 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
-from typing import Optional
 
 from nautilus_trader.model.data import Bar
-
 from vwap_wave.analysis.acceptance import AcceptanceResult
 from vwap_wave.analysis.acceptance import Direction
 
@@ -43,7 +41,7 @@ class RegimeState:
     bars_in_regime: int
     acceptance_confidence: float
     volume_confirmed: bool
-    previous_regime: Optional[MarketRegime] = None
+    previous_regime: MarketRegime | None = None
 
 
 class RegimeClassifier:
@@ -73,9 +71,9 @@ class RegimeClassifier:
 
         # State tracking
         self._current_regime = MarketRegime.BALANCE
-        self._previous_regime: Optional[MarketRegime] = None
+        self._previous_regime: MarketRegime | None = None
         self._bars_in_regime: int = 0
-        self._last_acceptance_result: Optional[AcceptanceResult] = None
+        self._last_acceptance_result: AcceptanceResult | None = None
 
     def update(self, bar: Bar) -> RegimeState:
         """
@@ -120,9 +118,7 @@ class RegimeClassifier:
             acceptance = self.acceptance.evaluate(vwap_state.sd1_upper, Direction.LONG)
             self._last_acceptance_result = acceptance
 
-            if acceptance.accepted and acceptance.volume_confirmed:
-                self._current_regime = MarketRegime.IMBALANCE_BULLISH
-            elif acceptance.accepted:
+            if (acceptance.accepted and acceptance.volume_confirmed) or acceptance.accepted:
                 self._current_regime = MarketRegime.IMBALANCE_BULLISH
             else:
                 self._current_regime = MarketRegime.BREAKOUT_UNCONFIRMED
@@ -134,9 +130,7 @@ class RegimeClassifier:
             acceptance = self.acceptance.evaluate(vwap_state.sd1_lower, Direction.SHORT)
             self._last_acceptance_result = acceptance
 
-            if acceptance.accepted and acceptance.volume_confirmed:
-                self._current_regime = MarketRegime.IMBALANCE_BEARISH
-            elif acceptance.accepted:
+            if (acceptance.accepted and acceptance.volume_confirmed) or acceptance.accepted:
                 self._current_regime = MarketRegime.IMBALANCE_BEARISH
             else:
                 self._current_regime = MarketRegime.BREAKOUT_UNCONFIRMED
@@ -170,12 +164,12 @@ class RegimeClassifier:
         return self._bars_in_regime
 
     @property
-    def previous_regime(self) -> Optional[MarketRegime]:
+    def previous_regime(self) -> MarketRegime | None:
         """Previous market regime."""
         return self._previous_regime
 
     @property
-    def last_acceptance(self) -> Optional[AcceptanceResult]:
+    def last_acceptance(self) -> AcceptanceResult | None:
         """Last acceptance evaluation result."""
         return self._last_acceptance_result
 
@@ -202,7 +196,7 @@ class RegimeClassifier:
         """Check if regime just changed (1 bar in new regime)."""
         return self._bars_in_regime == 1
 
-    def get_trend_direction(self) -> Optional[str]:
+    def get_trend_direction(self) -> str | None:
         """Get the current trend direction if trending."""
         if self._current_regime == MarketRegime.IMBALANCE_BULLISH:
             return "LONG"

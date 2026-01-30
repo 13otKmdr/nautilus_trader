@@ -11,14 +11,12 @@ and calculates extension levels for trade targets and exhaustion zones.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC
 from datetime import datetime
-from datetime import timezone
-from typing import Optional
 
 from nautilus_trader.core.correctness import PyCondition
 from nautilus_trader.indicators import Indicator
 from nautilus_trader.model.data import Bar
-
 from vwap_wave.config.settings import InitialBalanceConfig
 
 
@@ -64,12 +62,12 @@ class InitialBalanceTracker(Indicator):
         self._session_start_hour = session_start_hour
 
         # State tracking
-        self._ib_high: Optional[float] = None
-        self._ib_low: Optional[float] = None
+        self._ib_high: float | None = None
+        self._ib_low: float | None = None
         self._ib_complete: bool = False
-        self._session_start_time: Optional[datetime] = None
-        self._current_state: Optional[IBState] = None
-        self._last_session_date: Optional[datetime] = None
+        self._session_start_time: datetime | None = None
+        self._current_state: IBState | None = None
+        self._last_session_date: datetime | None = None
 
     def handle_bar(self, bar: Bar) -> None:
         """
@@ -83,7 +81,7 @@ class InitialBalanceTracker(Indicator):
         """
         PyCondition.not_none(bar, "bar")
 
-        bar_dt = datetime.fromtimestamp(bar.ts_event / 1e9, tz=timezone.utc)
+        bar_dt = datetime.fromtimestamp(bar.ts_event / 1e9, tz=UTC)
 
         # Check for new session
         if self._is_new_session(bar_dt):
@@ -177,7 +175,7 @@ class InitialBalanceTracker(Indicator):
         self._last_session_date = None
 
     @property
-    def state(self) -> Optional[IBState]:
+    def state(self) -> IBState | None:
         """Current IB state with extensions."""
         return self._current_state
 

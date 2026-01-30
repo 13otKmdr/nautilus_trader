@@ -68,7 +68,7 @@ class PositionSizer:
         signal: SetupSignal,
         account_equity: Decimal,
         symbol: str,
-        tick_value: Decimal = Decimal("1"),
+        tick_value: Decimal = Decimal(1),
     ) -> PositionSizeResult:
         """
         Calculate position size for a signal.
@@ -206,9 +206,7 @@ class PositionSizer:
         # Progressive reduction near limits
         if daily_dd >= max_daily * 0.8:
             return 0.25
-        elif daily_dd >= max_daily * 0.5:
-            return 0.5
-        elif weekly_dd >= max_weekly * 0.7:
+        elif daily_dd >= max_daily * 0.5 or weekly_dd >= max_weekly * 0.7:
             return 0.5
         else:
             return 1.0
@@ -218,7 +216,7 @@ class PositionSizer:
         account_equity: Decimal,
         entry_price: Decimal,
         stop_price: Decimal,
-        tick_value: Decimal = Decimal("1"),
+        tick_value: Decimal = Decimal(1),
     ) -> Decimal:
         """
         Calculate maximum position size based on max risk.
