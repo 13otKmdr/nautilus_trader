@@ -15,13 +15,13 @@ from vwap_wave.config.settings import VWAPWaveConfig
 
 
 __all__ = [
-    "VWAPConfig",
-    "InitialBalanceConfig",
     "AcceptanceConfig",
-    "ExhaustionConfig",
     "CVDConfig",
-    "VolumeProfileConfig",
+    "ExhaustionConfig",
+    "InitialBalanceConfig",
     "RiskConfig",
     "TradeManagementConfig",
+    "VWAPConfig",
     "VWAPWaveConfig",
+    "VolumeProfileConfig",
 ]

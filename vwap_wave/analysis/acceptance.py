@@ -12,10 +12,8 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 from nautilus_trader.model.data import Bar
-
 from vwap_wave.config.settings import AcceptanceConfig
 
 

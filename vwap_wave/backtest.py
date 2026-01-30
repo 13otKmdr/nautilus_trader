@@ -10,17 +10,13 @@ generating performance reports.
 
 from __future__ import annotations
 
-from datetime import datetime
 from decimal import Decimal
-from pathlib import Path
-from typing import Optional
 
 from nautilus_trader.backtest.config import BacktestEngineConfig
 from nautilus_trader.backtest.engine import BacktestEngine
 from nautilus_trader.config import LoggingConfig
 from nautilus_trader.model.currencies import USD
 from nautilus_trader.model.currencies import USDT
-from nautilus_trader.model.data import Bar
 from nautilus_trader.model.data import BarSpecification
 from nautilus_trader.model.data import BarType
 from nautilus_trader.model.enums import AccountType
@@ -31,7 +27,6 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TraderId
 from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.model.objects import Money
-
 from vwap_wave.config.settings import VWAPWaveConfig
 from vwap_wave.strategy import VWAPWaveStrategy
 from vwap_wave.strategy import VWAPWaveStrategyConfig
@@ -68,7 +63,7 @@ def create_backtest_engine(
 def add_forex_venue(
     engine: BacktestEngine,
     venue_name: str = "OANDA",
-    starting_balance: Decimal = Decimal("100000"),
+    starting_balance: Decimal = Decimal(100000),
 ) -> Venue:
     """
     Add a forex venue to the backtest engine.
@@ -103,7 +98,7 @@ def add_forex_venue(
 def add_crypto_venue(
     engine: BacktestEngine,
     venue_name: str = "BINANCE",
-    starting_balance: Decimal = Decimal("100000"),
+    starting_balance: Decimal = Decimal(100000),
 ) -> Venue:
     """
     Add a crypto venue to the backtest engine.
@@ -168,7 +163,7 @@ def run_vwap_wave_backtest(
     engine: BacktestEngine,
     instrument_id: InstrumentId,
     bar_type: BarType,
-    config: Optional[VWAPWaveConfig] = None,
+    config: VWAPWaveConfig | None = None,
 ) -> dict:
     """
     Run a VWAP Wave strategy backtest.
@@ -255,7 +250,7 @@ def print_backtest_summary(results: dict) -> None:
 
 def example_forex_backtest():
     """
-    Example: Run a forex backtest with EUR/USD.
+    Run a forex backtest with EUR/USD.
 
     Note: This requires bar data to be loaded into the engine.
     See NautilusTrader documentation for data loading patterns.
@@ -264,20 +259,20 @@ def example_forex_backtest():
     engine = create_backtest_engine()
 
     # Add venue
-    venue = add_forex_venue(engine, "OANDA", Decimal("100000"))
+    add_forex_venue(engine, "OANDA", Decimal(100000))
 
     # Create instrument ID
     instrument_id = InstrumentId.from_str("EUR/USD.OANDA")
 
     # Create bar type
-    bar_type = create_bar_type(instrument_id, aggregation_minutes=15)
+    create_bar_type(instrument_id, aggregation_minutes=15)
 
     # Note: You need to add instrument and data to the engine
     # engine.add_instrument(instrument)
     # engine.add_data(bar_data)
 
     # Custom configuration for forex
-    config = VWAPWaveConfig()
+    VWAPWaveConfig()
 
     # Run backtest
     # results = run_vwap_wave_backtest(engine, instrument_id, bar_type, config)
@@ -292,7 +287,7 @@ def example_forex_backtest():
 
 def example_crypto_backtest():
     """
-    Example: Run a crypto backtest with BTC/USDT.
+    Run a crypto backtest with BTC/USDT.
 
     Note: This requires bar data to be loaded into the engine.
     See NautilusTrader documentation for data loading patterns.
@@ -301,13 +296,13 @@ def example_crypto_backtest():
     engine = create_backtest_engine()
 
     # Add venue
-    venue = add_crypto_venue(engine, "BINANCE", Decimal("100000"))
+    add_crypto_venue(engine, "BINANCE", Decimal(100000))
 
     # Create instrument ID
     instrument_id = InstrumentId.from_str("BTCUSDT.BINANCE")
 
     # Create bar type
-    bar_type = create_bar_type(instrument_id, aggregation_minutes=15)
+    create_bar_type(instrument_id, aggregation_minutes=15)
 
     # Note: You need to add instrument and data to the engine
     # engine.add_instrument(instrument)
@@ -315,7 +310,7 @@ def example_crypto_backtest():
 
     # Custom configuration for crypto (more conservative)
     from vwap_wave.config.instruments import get_instrument_config
-    config = get_instrument_config("BTC/USDT", VWAPWaveConfig())
+    get_instrument_config("BTC/USDT", VWAPWaveConfig())
 
     # Run backtest
     # results = run_vwap_wave_backtest(engine, instrument_id, bar_type, config)

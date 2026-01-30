@@ -11,16 +11,14 @@ VWAP incrementally on each bar.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC
 from datetime import datetime
-from datetime import timezone
-from typing import Optional
 
 import numpy as np
 
 from nautilus_trader.core.correctness import PyCondition
 from nautilus_trader.indicators import Indicator
 from nautilus_trader.model.data import Bar
-
 from vwap_wave.config.settings import VWAPConfig
 
 
@@ -66,8 +64,8 @@ class VWAPEngine(Indicator):
         self._cumulative_volume: float = 0.0
         self._prices: list[float] = []
         self._volumes: list[float] = []
-        self._current_state: Optional[VWAPState] = None
-        self._last_reset_date: Optional[datetime] = None
+        self._current_state: VWAPState | None = None
+        self._last_reset_date: datetime | None = None
         self._bar_count: int = 0
 
     def handle_bar(self, bar: Bar) -> None:
@@ -83,7 +81,7 @@ class VWAPEngine(Indicator):
         PyCondition.not_none(bar, "bar")
 
         # Check for session reset
-        bar_dt = datetime.fromtimestamp(bar.ts_event / 1e9, tz=timezone.utc)
+        bar_dt = datetime.fromtimestamp(bar.ts_event / 1e9, tz=UTC)
         if self._should_reset(bar_dt):
             self._reset_session()
             self._last_reset_date = bar_dt.date()
@@ -157,11 +155,7 @@ class VWAPEngine(Indicator):
 
         # Check if this is a new day and we've passed the reset hour
         current_date = bar_dt.date()
-        if current_date > self._last_reset_date:
-            if bar_dt.hour >= self._session_reset_hour:
-                return True
-
-        return False
+        return bool(current_date > self._last_reset_date and bar_dt.hour >= self._session_reset_hour)
 
     def _reset_session(self) -> None:
         """Reset all cumulative values for new session."""
@@ -178,7 +172,7 @@ class VWAPEngine(Indicator):
         self._last_reset_date = None
 
     @property
-    def state(self) -> Optional[VWAPState]:
+    def state(self) -> VWAPState | None:
         """Current VWAP state with all bands."""
         return self._current_state
 
@@ -212,14 +206,16 @@ class VWAPEngine(Indicator):
         if self._current_state is None:
             return 0.0
 
-        if level == 1:
-            return self._current_state.sd1_upper if upper else self._current_state.sd1_lower
-        elif level == 2:
-            return self._current_state.sd2_upper if upper else self._current_state.sd2_lower
-        elif level == 3:
-            return self._current_state.sd3_upper if upper else self._current_state.sd3_lower
-        else:
-            return 0.0
+        bands = {
+            1: (self._current_state.sd1_upper, self._current_state.sd1_lower),
+            2: (self._current_state.sd2_upper, self._current_state.sd2_lower),
+            3: (self._current_state.sd3_upper, self._current_state.sd3_lower),
+        }
+
+        band_tuple = bands.get(level)
+        if band_tuple:
+            return band_tuple[0] if upper else band_tuple[1]
+        return 0.0
 
     def price_in_value_area(self, price: float) -> bool:
         """Check if price is within the SD1 bands (value area)."""

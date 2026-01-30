@@ -10,8 +10,8 @@ from vwap_wave.execution.trade_manager import TradeState
 
 
 __all__ = [
+    "ManagedTrade",
     "TradeManager",
     "TradeState",
-    "ManagedTrade",
     "VWAPWaveOrderFactory",
 ]

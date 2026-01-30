@@ -13,7 +13,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from nautilus_trader.model.data import Bar
-
 from vwap_wave.analysis.regime_classifier import MarketRegime
 from vwap_wave.analysis.regime_classifier import RegimeState
 from vwap_wave.setups.base_setup import BaseSetup
@@ -169,10 +168,7 @@ class VWAPBounceSetup(BaseSetup):
             return True
 
         # For bearish bounce: high touched VWAP
-        if high >= vwap - tolerance and low <= vwap:
-            return True
-
-        return False
+        return bool(high >= vwap - tolerance and low <= vwap)
 
     def _evaluate_bullish_bounce(
         self,

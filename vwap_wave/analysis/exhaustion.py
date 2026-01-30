@@ -14,10 +14,8 @@ from collections import deque
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
-from typing import Optional
 
 from nautilus_trader.model.data import Bar
-
 from vwap_wave.config.settings import ExhaustionConfig
 
 
@@ -114,7 +112,7 @@ class ExhaustionEngine:
 
         # State tracking
         self._bar_history: deque = deque(maxlen=50)
-        self._pending: Optional[PendingExhaustion] = None
+        self._pending: PendingExhaustion | None = None
         self._bar_index: int = 0
         self._atr: float = 0.0
         self._avg_volume: float = 0.0
@@ -202,22 +200,22 @@ class ExhaustionEngine:
         if self._pending is not None:
             bars_since_registration = self._bar_index - self._pending.registered_bar_index
 
-            if bars_since_registration >= self.config.confirmation_bars:
-                # Verify volume dropoff
-                if self._verify_volume_dropoff(self._pending.absorption.bar_index):
-                    # Verify price rejection
-                    if self._verify_price_rejection(self._pending.direction):
-                        confidence = self._calculate_confidence(self._pending)
-                        signal = ExhaustionSignal(
-                            confirmed=True,
-                            zone=self._pending.zone,
-                            direction=self._pending.direction,
-                            absorption=self._pending.absorption,
-                            divergence_magnitude=self._pending.divergence_magnitude,
-                            confidence=confidence,
-                        )
-                        self._pending = None
-                        return signal
+            if (
+                bars_since_registration >= self.config.confirmation_bars
+                and self._verify_volume_dropoff(self._pending.absorption.bar_index)
+                and self._verify_price_rejection(self._pending.direction)
+            ):
+                confidence = self._calculate_confidence(self._pending)
+                signal = ExhaustionSignal(
+                    confirmed=True,
+                    zone=self._pending.zone,
+                    direction=self._pending.direction,
+                    absorption=self._pending.absorption,
+                    divergence_magnitude=self._pending.divergence_magnitude,
+                    confidence=confidence,
+                )
+                self._pending = None
+                return signal
 
             # Invalidate if too much time passed
             if bars_since_registration > self.config.confirmation_bars + 2:
@@ -377,7 +375,7 @@ class ExhaustionEngine:
         """Check if there's a pending exhaustion signal."""
         return self._pending is not None
 
-    def get_pending_direction(self) -> Optional[FadeDirection]:
+    def get_pending_direction(self) -> FadeDirection | None:
         """Get the direction of the pending signal."""
         if self._pending is None:
             return None

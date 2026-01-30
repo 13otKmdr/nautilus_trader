@@ -6,10 +6,7 @@
 from unittest.mock import MagicMock
 from unittest.mock import PropertyMock
 
-import pytest
-
 from vwap_wave.analysis.exhaustion import ExhaustionEngine
-from vwap_wave.analysis.exhaustion import ExhaustionSignal
 from vwap_wave.analysis.exhaustion import ExhaustionZone
 from vwap_wave.analysis.exhaustion import FadeDirection
 from vwap_wave.config.settings import ExhaustionConfig
@@ -189,7 +186,7 @@ class TestExhaustionEngine:
         avg_volume = 1000
 
         # Add bars at extreme
-        for i in range(5):
+        for _i in range(5):
             bar = create_mock_bar(1.1050, 1.1035, 1.1045, 1.1040, avg_volume)
             self.engine.update(bar, atr=0.0010, avg_volume=avg_volume)
 
@@ -235,7 +232,7 @@ class TestExhaustionEngine:
             bar = create_mock_bar(1.1045, 1.1030, 1.1035, 1.1040, 2000)  # Still high volume
             self.engine.update(bar, atr=0.0010, avg_volume=avg_volume)
 
-        signal = self.engine.evaluate()
+        self.engine.evaluate()
 
         # Should not confirm without proper volume dropoff
         # (Implementation depends on exact threshold)
@@ -252,9 +249,9 @@ class TestExhaustionEngine:
         zone = self.engine._get_exhaustion_zone()
 
         if zone == ExhaustionZone.SD_UPPER:
-            expected_fade = FadeDirection.FADE_SHORT
+            pass
         else:
-            expected_fade = FadeDirection.FADE_LONG
+            pass
 
         # If signal was generated, check direction
         if self.engine.get_pending_direction():

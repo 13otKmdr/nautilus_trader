@@ -13,14 +13,12 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 import numpy as np
 
 from nautilus_trader.core.correctness import PyCondition
 from nautilus_trader.indicators import Indicator
 from nautilus_trader.model.data import Bar
-
 from vwap_wave.config.settings import VolumeProfileConfig
 
 
@@ -82,7 +80,7 @@ class VolumeProfileBuilder(Indicator):
 
         # State tracking
         self._bar_history: deque = deque(maxlen=config.lookback_bars)
-        self._current_state: Optional[VolumeProfileState] = None
+        self._current_state: VolumeProfileState | None = None
         self._bar_count: int = 0
 
     def handle_bar(self, bar: Bar) -> None:
@@ -122,78 +120,31 @@ class VolumeProfileBuilder(Indicator):
             return
 
         bars = list(self._bar_history)
-
-        # Find price range
-        all_highs = [b["high"] for b in bars]
-        all_lows = [b["low"] for b in bars]
-        profile_high = max(all_highs)
-        profile_low = min(all_lows)
-
+        profile_low, profile_high = self._get_price_range(bars)
         price_range = profile_high - profile_low
+
         if price_range == 0:
             return
 
-        # Create price buckets
         bucket_size = price_range / self._price_buckets
-        buckets = np.zeros(self._price_buckets)
+        buckets = self._build_buckets(bars, profile_low, bucket_size)
 
-        # Distribute volume across buckets using typical price
-        for bar in bars:
-            typical_price = (bar["high"] + bar["low"] + bar["close"]) / 3.0
-            volume = bar["volume"]
-
-            # Distribute volume to the appropriate bucket
-            # Also distribute some volume to adjacent buckets for the bar's range
-            for price in [bar["low"], typical_price, bar["high"]]:
-                bucket_idx = int((price - profile_low) / bucket_size)
-                bucket_idx = max(0, min(bucket_idx, self._price_buckets - 1))
-                buckets[bucket_idx] += volume / 3.0
-
-        # Find POC (highest volume bucket)
-        poc_bucket = np.argmax(buckets)
-        poc = profile_low + (poc_bucket + 0.5) * bucket_size
-        poc_volume = buckets[poc_bucket]
-
-        # Calculate value area (70% of volume centered on POC)
         total_volume = np.sum(buckets)
         if total_volume == 0:
             return
 
-        value_area_volume = total_volume * 0.7
-        accumulated_volume = poc_volume
-        upper_idx = poc_bucket
-        lower_idx = poc_bucket
+        poc_bucket = np.argmax(buckets)
+        poc = profile_low + (poc_bucket + 0.5) * bucket_size
+        poc_volume = buckets[poc_bucket]
 
-        while accumulated_volume < value_area_volume:
-            # Extend to the side with higher volume
-            upper_vol = buckets[upper_idx + 1] if upper_idx + 1 < self._price_buckets else 0
-            lower_vol = buckets[lower_idx - 1] if lower_idx - 1 >= 0 else 0
+        va_low_idx, va_high_idx = self._calculate_value_area_indices(
+            buckets, poc_bucket, poc_volume, total_volume
+        )
 
-            if upper_vol >= lower_vol and upper_idx + 1 < self._price_buckets:
-                upper_idx += 1
-                accumulated_volume += upper_vol
-            elif lower_idx - 1 >= 0:
-                lower_idx -= 1
-                accumulated_volume += lower_vol
-            else:
-                break
+        value_area_high = profile_low + (va_high_idx + 1) * bucket_size
+        value_area_low = profile_low + va_low_idx * bucket_size
 
-        value_area_high = profile_low + (upper_idx + 1) * bucket_size
-        value_area_low = profile_low + lower_idx * bucket_size
-
-        # Identify HVN and LVN levels
-        volume_threshold_hvn = np.percentile(buckets[buckets > 0], self._hvn_percentile)
-        volume_threshold_lvn = np.percentile(buckets[buckets > 0], self._lvn_percentile)
-
-        hvn_levels = []
-        lvn_levels = []
-
-        for i, vol in enumerate(buckets):
-            price_level = profile_low + (i + 0.5) * bucket_size
-            if vol >= volume_threshold_hvn:
-                hvn_levels.append(price_level)
-            elif vol > 0 and vol <= volume_threshold_lvn:
-                lvn_levels.append(price_level)
+        hvn_levels, lvn_levels = self._identify_nodes(buckets, profile_low, bucket_size)
 
         self._current_state = VolumeProfileState(
             poc=poc,
@@ -207,6 +158,67 @@ class VolumeProfileBuilder(Indicator):
             total_volume=total_volume,
         )
 
+    def _get_price_range(self, bars: list[dict]) -> tuple[float, float]:
+        all_highs = [b["high"] for b in bars]
+        all_lows = [b["low"] for b in bars]
+        return min(all_lows), max(all_highs)
+
+    def _build_buckets(
+        self, bars: list[dict], profile_low: float, bucket_size: float
+    ) -> np.ndarray:
+        buckets = np.zeros(self._price_buckets)
+        for bar in bars:
+            typical_price = (bar["high"] + bar["low"] + bar["close"]) / 3.0
+            volume = bar["volume"]
+            for price in [bar["low"], typical_price, bar["high"]]:
+                bucket_idx = int((price - profile_low) / bucket_size)
+                bucket_idx = max(0, min(bucket_idx, self._price_buckets - 1))
+                buckets[bucket_idx] += volume / 3.0
+        return buckets
+
+    def _calculate_value_area_indices(
+        self,
+        buckets: np.ndarray,
+        poc_bucket: int,
+        poc_volume: float,
+        total_volume: float,
+    ) -> tuple[int, int]:
+        value_area_volume = total_volume * 0.7
+        accumulated_volume = poc_volume
+        upper_idx = poc_bucket
+        lower_idx = poc_bucket
+
+        while accumulated_volume < value_area_volume:
+            upper_vol = buckets[upper_idx + 1] if upper_idx + 1 < self._price_buckets else 0
+            lower_vol = buckets[lower_idx - 1] if lower_idx - 1 >= 0 else 0
+
+            if upper_vol >= lower_vol and upper_idx + 1 < self._price_buckets:
+                upper_idx += 1
+                accumulated_volume += upper_vol
+            elif lower_idx - 1 >= 0:
+                lower_idx -= 1
+                accumulated_volume += lower_vol
+            else:
+                break
+        return lower_idx, upper_idx
+
+    def _identify_nodes(
+        self, buckets: np.ndarray, profile_low: float, bucket_size: float
+    ) -> tuple[list[float], list[float]]:
+        volume_threshold_hvn = np.percentile(buckets[buckets > 0], self._hvn_percentile)
+        volume_threshold_lvn = np.percentile(buckets[buckets > 0], self._lvn_percentile)
+
+        hvn_levels = []
+        lvn_levels = []
+
+        for i, vol in enumerate(buckets):
+            price_level = profile_low + (i + 0.5) * bucket_size
+            if vol >= volume_threshold_hvn:
+                hvn_levels.append(price_level)
+            elif vol > 0 and vol <= volume_threshold_lvn:
+                lvn_levels.append(price_level)
+        return hvn_levels, lvn_levels
+
     def _reset(self) -> None:
         """Reset the indicator (called by base class)."""
         self._bar_history.clear()
@@ -214,7 +226,7 @@ class VolumeProfileBuilder(Indicator):
         self._bar_count = 0
 
     @property
-    def state(self) -> Optional[VolumeProfileState]:
+    def state(self) -> VolumeProfileState | None:
         """Current volume profile state."""
         return self._current_state
 
@@ -233,14 +245,14 @@ class VolumeProfileBuilder(Indicator):
         """Lower bound of value area."""
         return self._current_state.value_area_low if self._current_state else 0.0
 
-    def get_nearest_hvn(self, price: float) -> Optional[float]:
+    def get_nearest_hvn(self, price: float) -> float | None:
         """Get the nearest HVN to a price."""
         if self._current_state is None or not self._current_state.hvn_levels:
             return None
 
         return min(self._current_state.hvn_levels, key=lambda x: abs(x - price))
 
-    def get_nearest_lvn(self, price: float) -> Optional[float]:
+    def get_nearest_lvn(self, price: float) -> float | None:
         """Get the nearest LVN to a price."""
         if self._current_state is None or not self._current_state.lvn_levels:
             return None
