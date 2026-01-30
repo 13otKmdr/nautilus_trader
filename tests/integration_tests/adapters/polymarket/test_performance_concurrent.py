@@ -1,11 +1,13 @@
 
-import pytest
 import time
-import asyncio
 from unittest.mock import MagicMock
+
+import pytest
+
 from nautilus_trader.adapters.polymarket.providers import PolymarketInstrumentProvider
 from nautilus_trader.common.component import LiveClock
 from nautilus_trader.model.identifiers import InstrumentId
+
 
 @pytest.fixture
 def mock_clob_client_delayed():

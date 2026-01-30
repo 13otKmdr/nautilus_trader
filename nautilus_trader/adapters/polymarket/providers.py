@@ -253,7 +253,7 @@ class PolymarketInstrumentProvider(InstrumentProvider):
         for i, response in enumerate(results):
             instrument_id = instrument_ids[i]
 
-            if isinstance(response, Exception):
+            if isinstance(response, BaseException):
                 self._log.error(f"Failed to load instrument {instrument_id}: {response}")
                 continue
 

@@ -1,8 +1,9 @@
 
 import asyncio
 import time
-from typing import Any
 from dataclasses import dataclass
+from typing import Any
+
 
 # Mocks
 @dataclass
