@@ -12,14 +12,12 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
 from nautilus_trader.core.correctness import PyCondition
 from nautilus_trader.indicators import Indicator
 from nautilus_trader.model.data import Bar
-
 from vwap_wave.config.settings import CVDConfig
 
 

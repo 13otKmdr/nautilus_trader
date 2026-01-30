@@ -13,14 +13,12 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 import numpy as np
 
 from nautilus_trader.core.correctness import PyCondition
 from nautilus_trader.indicators import Indicator
 from nautilus_trader.model.data import Bar
-
 from vwap_wave.config.settings import VolumeProfileConfig
 
 
@@ -82,7 +80,7 @@ class VolumeProfileBuilder(Indicator):
 
         # State tracking
         self._bar_history: deque = deque(maxlen=config.lookback_bars)
-        self._current_state: Optional[VolumeProfileState] = None
+        self._current_state: VolumeProfileState | None = None
         self._bar_count: int = 0
 
     def handle_bar(self, bar: Bar) -> None:
@@ -214,7 +212,7 @@ class VolumeProfileBuilder(Indicator):
         self._bar_count = 0
 
     @property
-    def state(self) -> Optional[VolumeProfileState]:
+    def state(self) -> VolumeProfileState | None:
         """Current volume profile state."""
         return self._current_state
 
@@ -233,14 +231,14 @@ class VolumeProfileBuilder(Indicator):
         """Lower bound of value area."""
         return self._current_state.value_area_low if self._current_state else 0.0
 
-    def get_nearest_hvn(self, price: float) -> Optional[float]:
+    def get_nearest_hvn(self, price: float) -> float | None:
         """Get the nearest HVN to a price."""
         if self._current_state is None or not self._current_state.hvn_levels:
             return None
 
         return min(self._current_state.hvn_levels, key=lambda x: abs(x - price))
 
-    def get_nearest_lvn(self, price: float) -> Optional[float]:
+    def get_nearest_lvn(self, price: float) -> float | None:
         """Get the nearest LVN to a price."""
         if self._current_state is None or not self._current_state.lvn_levels:
             return None

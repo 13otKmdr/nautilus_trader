@@ -11,7 +11,6 @@ Parameters are grouped by functional area.
 from dataclasses import dataclass
 from dataclasses import field
 from decimal import Decimal
-from typing import Tuple
 
 
 @dataclass(frozen=True)
@@ -19,7 +18,7 @@ class VWAPConfig:
     """VWAP engine configuration."""
 
     session_reset_hour: int = 0  # Hour (UTC) to reset VWAP calculation
-    sd_bands: Tuple[float, ...] = (1.0, 2.0, 3.0)  # Standard deviation band levels
+    sd_bands: tuple[float, ...] = (1.0, 2.0, 3.0)  # Standard deviation band levels
 
 
 @dataclass(frozen=True)
@@ -27,7 +26,7 @@ class InitialBalanceConfig:
     """Initial Balance configuration."""
 
     ib_period_minutes: int = 60  # Duration of IB period
-    extensions: Tuple[float, ...] = (1.0, 2.0, 3.0)  # IB range extension multipliers
+    extensions: tuple[float, ...] = (1.0, 2.0, 3.0)  # IB range extension multipliers
 
 
 @dataclass(frozen=True)

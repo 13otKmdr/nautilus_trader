@@ -6,10 +6,7 @@
 from unittest.mock import MagicMock
 from unittest.mock import PropertyMock
 
-import pytest
-
 from vwap_wave.analysis.exhaustion import ExhaustionEngine
-from vwap_wave.analysis.exhaustion import ExhaustionSignal
 from vwap_wave.analysis.exhaustion import ExhaustionZone
 from vwap_wave.analysis.exhaustion import FadeDirection
 from vwap_wave.config.settings import ExhaustionConfig
@@ -189,7 +186,7 @@ class TestExhaustionEngine:
         avg_volume = 1000
 
         # Add bars at extreme
-        for i in range(5):
+        for _ in range(5):
             bar = create_mock_bar(1.1050, 1.1035, 1.1045, 1.1040, avg_volume)
             self.engine.update(bar, atr=0.0010, avg_volume=avg_volume)
 
@@ -238,7 +235,7 @@ class TestExhaustionEngine:
         signal = self.engine.evaluate()
 
         # Should not confirm without proper volume dropoff
-        # (Implementation depends on exact threshold)
+        assert signal.confirmed is False
 
     def test_fade_direction_determination(self):
         """Test correct fade direction is determined."""
@@ -258,10 +255,7 @@ class TestExhaustionEngine:
 
         # If signal was generated, check direction
         if self.engine.get_pending_direction():
-            assert self.engine.get_pending_direction() in [
-                FadeDirection.FADE_SHORT,
-                FadeDirection.FADE_LONG,
-            ]
+            assert self.engine.get_pending_direction() == expected_fade
 
     def test_reset_clears_pending_signal(self):
         """Test reset clears pending signals."""

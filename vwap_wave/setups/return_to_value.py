@@ -12,10 +12,8 @@ area edge.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from typing import Optional
 
 from nautilus_trader.model.data import Bar
-
 from vwap_wave.analysis.regime_classifier import MarketRegime
 from vwap_wave.analysis.regime_classifier import RegimeState
 from vwap_wave.analysis.rejection import RejectionType
@@ -62,7 +60,7 @@ class ReturnToValueSetup(BaseSetup):
         config: VWAPWaveConfig,
         vwap_engine: VWAPEngine,
         acceptance_engine: AcceptanceEngine,
-        rejection_engine: Optional[RejectionEngine] = None,
+        rejection_engine: RejectionEngine | None = None,
     ):
         super().__init__("RETURN_TO_VALUE", config)
         self.vwap = vwap_engine
@@ -70,7 +68,7 @@ class ReturnToValueSetup(BaseSetup):
         self.rejection = rejection_engine
 
         # Internal state for tracking failed breakouts
-        self._pending_rejection: Optional[dict] = None
+        self._pending_rejection: dict | None = None
         self._bars_since_rejection: int = 0
 
     def is_eligible(self, regime_state: RegimeState) -> bool:
@@ -97,7 +95,7 @@ class ReturnToValueSetup(BaseSetup):
             return True
 
         # Eligible if regime just changed from imbalance to balance
-        if (
+        return (
             regime_state.regime == MarketRegime.BALANCE
             and regime_state.previous_regime
             in [
@@ -106,10 +104,7 @@ class ReturnToValueSetup(BaseSetup):
                 MarketRegime.BREAKOUT_UNCONFIRMED,
             ]
             and regime_state.bars_in_regime <= 3
-        ):
-            return True
-
-        return False
+        )
 
     def evaluate(self, regime_state: RegimeState, bar: Bar, atr: float) -> SetupSignal:
         """
@@ -150,10 +145,23 @@ class ReturnToValueSetup(BaseSetup):
 
         vwap_state = self.vwap.state
         close = bar.close.as_double()
-        high = bar.high.as_double()
-        low = bar.low.as_double()
-        open_price = bar.open.as_double()
 
+        # Check for new rejection signal
+        self._update_rejection_state(regime_state, vwap_state, close)
+
+        # If we have a pending rejection, look for entry
+        if self._pending_rejection is not None:
+            return self._evaluate_entry(
+                bar,
+                atr,
+                vwap_state,
+                close,
+            )
+
+        return SetupSignal.no_signal()
+
+    def _update_rejection_state(self, regime_state: RegimeState, vwap_state, close: float) -> None:
+        """Update internal rejection state based on engines or regime changes."""
         # Check for new rejection signal if we have rejection engine
         if self.rejection is not None:
             rejection = self.rejection.evaluate()
@@ -165,9 +173,10 @@ class ReturnToValueSetup(BaseSetup):
                     "strength": rejection.rejection_strength,
                 }
                 self._bars_since_rejection = 0
+                return
 
         # Use regime change as implicit rejection detection if no rejection engine
-        if self.rejection is None and regime_state.regime == MarketRegime.BALANCE:
+        if regime_state.regime == MarketRegime.BALANCE:
             if regime_state.previous_regime == MarketRegime.IMBALANCE_BULLISH:
                 self._pending_rejection = {
                     "type": RejectionType.LOOK_ABOVE_FAIL,
@@ -185,33 +194,19 @@ class ReturnToValueSetup(BaseSetup):
                 }
                 self._bars_since_rejection = 0
 
-        # If we have a pending rejection, look for entry
-        if self._pending_rejection is not None:
-            return self._evaluate_entry(
-                bar,
-                atr,
-                vwap_state,
-                close,
-                high,
-                low,
-                open_price,
-            )
-
-        return SetupSignal.no_signal()
-
     def _evaluate_entry(
         self,
         bar: Bar,
         atr: float,
         vwap_state,
         close: float,
-        high: float,
-        low: float,
-        open_price: float,
     ) -> SetupSignal:
         """Evaluate entry conditions for pending rejection."""
         rejection = self._pending_rejection
         rejection_type = rejection["type"]
+        high = bar.high.as_double()
+        low = bar.low.as_double()
+        open_price = bar.open.as_double()
 
         if rejection_type in [RejectionType.LOOK_ABOVE_FAIL, RejectionType.TRAP_LONG]:
             # Failed upside breakout - look for short entry

@@ -13,7 +13,6 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 from nautilus_trader.model.data import Bar
 
@@ -68,7 +67,7 @@ class RejectionEngine:
 
         # State tracking
         self._bar_history: deque = deque(maxlen=50)
-        self._pending_breakout: Optional[dict] = None
+        self._pending_breakout: dict | None = None
         self._bar_count: int = 0
         self._atr: float = 0.0
 
@@ -236,7 +235,7 @@ class RejectionEngine:
         """Check if there's a pending breakout being tracked."""
         return self._pending_breakout is not None
 
-    def get_pending_direction(self) -> Optional[str]:
+    def get_pending_direction(self) -> str | None:
         """Get the direction of the pending breakout."""
         if self._pending_breakout is None:
             return None

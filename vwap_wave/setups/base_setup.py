@@ -15,10 +15,8 @@ from dataclasses import dataclass
 from dataclasses import field
 from enum import Enum
 from typing import Any
-from typing import Dict
 
 from nautilus_trader.model.data import Bar
-
 from vwap_wave.analysis.regime_classifier import RegimeState
 
 
@@ -40,7 +38,7 @@ class SetupSignal:
     stop_price: float
     target_price: float
     confidence: float
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def no_signal(cls) -> SetupSignal:
@@ -117,7 +115,6 @@ class BaseSetup(ABC):
             Signal with trade parameters if valid, otherwise no_signal.
 
         """
-        pass
 
     @abstractmethod
     def is_eligible(self, regime_state: RegimeState) -> bool:
@@ -135,8 +132,6 @@ class BaseSetup(ABC):
             True if setup is eligible in current regime.
 
         """
-        pass
 
     def reset(self) -> None:
         """Reset any internal state. Override in subclass if needed."""
-        pass

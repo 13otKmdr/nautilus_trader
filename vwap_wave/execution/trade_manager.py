@@ -15,14 +15,10 @@ from dataclasses import field
 from enum import Enum
 from typing import TYPE_CHECKING
 from typing import Callable
-from typing import Dict
-from typing import List
-from typing import Optional
 
 from nautilus_trader.model.data import Bar
 from nautilus_trader.model.identifiers import ClientOrderId
 from nautilus_trader.model.identifiers import PositionId
-
 from vwap_wave.config.settings import TradeManagementConfig
 from vwap_wave.risk.position_sizer import PositionSizeResult
 from vwap_wave.setups.base_setup import SetupSignal
@@ -48,7 +44,7 @@ class ManagedTrade:
     """A trade being actively managed."""
 
     order_id: ClientOrderId
-    position_id: Optional[PositionId]
+    position_id: PositionId | None
     signal: SetupSignal
     position_size: PositionSizeResult
     state: TradeState
@@ -60,7 +56,7 @@ class ManagedTrade:
     bars_in_trade: int
     partial_taken: bool
     trail_active: bool
-    metadata: Dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
 
 
 class TradeManager:
@@ -79,17 +75,17 @@ class TradeManager:
 
     def __init__(self, config: TradeManagementConfig):
         self.config = config
-        self._trades: Dict[str, ManagedTrade] = {}  # order_id -> trade
-        self._position_trades: Dict[str, str] = {}  # position_id -> order_id
+        self._trades: dict[str, ManagedTrade] = {}  # order_id -> trade
+        self._position_trades: dict[str, str] = {}  # position_id -> order_id
 
         # Callbacks for order actions
-        self._modify_stop_callback: Optional[Callable] = None
-        self._close_position_callback: Optional[Callable] = None
+        self._modify_stop_callback: Callable | None = None
+        self._close_position_callback: Callable | None = None
 
     def set_callbacks(
         self,
-        modify_stop: Optional[Callable] = None,
-        close_position: Optional[Callable] = None,
+        modify_stop: Callable | None = None,
+        close_position: Callable | None = None,
     ) -> None:
         """Set callbacks for order modifications."""
         self._modify_stop_callback = modify_stop
@@ -165,7 +161,7 @@ class TradeManager:
 
         self._position_trades[str(position_id)] = order_key
 
-    def on_close(self, position_id: PositionId) -> Optional[ManagedTrade]:
+    def on_close(self, position_id: PositionId) -> ManagedTrade | None:
         """
         Handle position close event.
 
@@ -201,8 +197,8 @@ class TradeManager:
         position_id: PositionId,
         bar: Bar,
         atr: float,
-        regime_classifier: Optional[RegimeClassifier] = None,
-    ) -> Optional[Dict]:
+        regime_classifier: RegimeClassifier | None = None,
+    ) -> dict | None:
         """
         Manage an open position.
 
@@ -281,8 +277,8 @@ class TradeManager:
         self,
         trade: ManagedTrade,
         bar: Bar,
-        regime_classifier: Optional[RegimeClassifier],
-    ) -> Optional[Dict]:
+        regime_classifier: RegimeClassifier | None,
+    ) -> dict | None:
         """Check for trade invalidation conditions."""
         close = bar.close.as_double()
 
@@ -295,14 +291,17 @@ class TradeManager:
                 return {"reason": "stop_hit", "price": close}
 
         # Regime change invalidation for continuation trades
-        if regime_classifier and trade.signal.setup_type == "DISCOVERY_CONTINUATION":
-            if regime_classifier.is_balanced():
-                # Trend has ended, consider closing
-                return {"reason": "regime_change", "new_regime": "balance"}
+        if (
+            regime_classifier
+            and trade.signal.setup_type == "DISCOVERY_CONTINUATION"
+            and regime_classifier.is_balanced()
+        ):
+            # Trend has ended, consider closing
+            return {"reason": "regime_change", "new_regime": "balance"}
 
         return None
 
-    def _check_partial_exit(self, trade: ManagedTrade, current_price: float) -> Optional[Dict]:
+    def _check_partial_exit(self, trade: ManagedTrade, current_price: float) -> dict | None:
         """Check if partial exit conditions are met."""
         risk = abs(trade.entry_price - trade.signal.stop_price)
         if risk == 0:
@@ -322,7 +321,7 @@ class TradeManager:
 
         return None
 
-    def _check_trailing_stop(self, trade: ManagedTrade, atr: float) -> Optional[Dict]:
+    def _check_trailing_stop(self, trade: ManagedTrade, atr: float) -> dict | None:
         """Check and update trailing stop."""
         risk = abs(trade.entry_price - trade.signal.stop_price)
         if risk == 0:
@@ -373,11 +372,11 @@ class TradeManager:
 
         return None
 
-    def get_trade(self, order_id: ClientOrderId) -> Optional[ManagedTrade]:
+    def get_trade(self, order_id: ClientOrderId) -> ManagedTrade | None:
         """Get a managed trade by order ID."""
         return self._trades.get(str(order_id))
 
-    def get_trade_by_position(self, position_id: PositionId) -> Optional[ManagedTrade]:
+    def get_trade_by_position(self, position_id: PositionId) -> ManagedTrade | None:
         """Get a managed trade by position ID."""
         position_key = str(position_id)
         if position_key not in self._position_trades:
@@ -385,9 +384,13 @@ class TradeManager:
         order_key = self._position_trades[position_key]
         return self._trades.get(order_key)
 
-    def get_active_trades(self) -> List[ManagedTrade]:
+    def get_active_trades(self) -> list[ManagedTrade]:
         """Get all active trades."""
-        return [t for t in self._trades.values() if t.state not in [TradeState.CLOSED, TradeState.PENDING]]
+        return [
+            t
+            for t in self._trades.values()
+            if t.state not in [TradeState.CLOSED, TradeState.PENDING]
+        ]
 
     def get_trade_count(self) -> int:
         """Get count of active trades."""

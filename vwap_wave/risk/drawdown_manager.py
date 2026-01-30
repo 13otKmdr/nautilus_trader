@@ -11,11 +11,10 @@ when thresholds are exceeded.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC
 from datetime import date
 from datetime import datetime
-from datetime import timezone
 from decimal import Decimal
-from typing import Optional
 
 from vwap_wave.config.settings import RiskConfig
 
@@ -54,13 +53,13 @@ class DrawdownManager:
         self._weekly_high_water_mark: Decimal = Decimal(0)
         self._current_equity: Decimal = Decimal(0)
 
-        self._last_daily_reset: Optional[date] = None
-        self._last_weekly_reset: Optional[date] = None
+        self._last_daily_reset: date | None = None
+        self._last_weekly_reset: date | None = None
 
         self._is_halted: bool = False
         self._halt_reason: str = ""
 
-    def update(self, current_equity: Decimal, timestamp: Optional[datetime] = None) -> DrawdownState:
+    def update(self, current_equity: Decimal, timestamp: datetime | None = None) -> DrawdownState:
         """
         Update drawdown tracking with current equity.
 
@@ -78,7 +77,7 @@ class DrawdownManager:
 
         """
         if timestamp is None:
-            timestamp = datetime.now(timezone.utc)
+            timestamp = datetime.now(UTC)
 
         current_date = timestamp.date()
 

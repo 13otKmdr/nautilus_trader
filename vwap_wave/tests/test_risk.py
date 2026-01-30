@@ -3,9 +3,9 @@
 # -------------------------------------------------------------------------------------------------
 """Tests for risk management components."""
 
+from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
-from datetime import timezone
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -15,7 +15,6 @@ from vwap_wave.config.settings import RiskConfig
 from vwap_wave.risk.correlation_manager import CorrelationManager
 from vwap_wave.risk.drawdown_manager import DrawdownManager
 from vwap_wave.risk.position_sizer import PositionSizer
-from vwap_wave.risk.position_sizer import PositionSizeResult
 from vwap_wave.setups.base_setup import SetupSignal
 from vwap_wave.setups.base_setup import TradeDirection
 
@@ -63,7 +62,7 @@ class TestPositionSizer:
             metadata={},
         )
 
-        equity = Decimal("100000")
+        equity = Decimal(100000)
         result = self.sizer.calculate(signal, equity, "EUR/USD")
 
         assert result.risk_percent == self.config.max_risk_per_trade
@@ -82,7 +81,7 @@ class TestPositionSizer:
             metadata={},
         )
 
-        equity = Decimal("100000")
+        equity = Decimal(100000)
         result = self.sizer.calculate(signal, equity, "EUR/USD")
 
         # Should be at or near min risk
@@ -102,7 +101,7 @@ class TestPositionSizer:
             metadata={},
         )
 
-        equity = Decimal("100000")
+        equity = Decimal(100000)
         result = self.sizer.calculate(signal, equity, "EUR/USD")
 
         assert result.quantity == Decimal(0)
@@ -123,7 +122,7 @@ class TestPositionSizer:
             metadata={},
         )
 
-        equity = Decimal("100000")
+        equity = Decimal(100000)
         result = self.sizer.calculate(signal, equity, "EUR/USD")
 
         assert result.drawdown_multiplier == 0.25  # 80% of max = 0.25 multiplier
@@ -143,7 +142,7 @@ class TestPositionSizer:
             metadata={},
         )
 
-        equity = Decimal("100000")
+        equity = Decimal(100000)
         result = self.sizer.calculate(signal, equity, "EUR/USD")
 
         assert result.correlation_multiplier == 0.5
@@ -161,15 +160,15 @@ class TestPositionSizer:
             metadata={},
         )
 
-        equity = Decimal("100000")
-        tick_value = Decimal("10")  # $10 per pip for 1 lot
+        equity = Decimal(100000)
+        tick_value = Decimal(10)  # $10 per pip for 1 lot
 
         result = self.sizer.calculate(signal, equity, "EUR/USD", tick_value)
 
         # Risk amount = 100000 * 0.02 = 2000
         # Stop distance = 0.001
         # Quantity = 2000 / (0.001 * 10) = 200000
-        assert result.risk_amount == Decimal("2000")
+        assert result.risk_amount == Decimal(2000)
 
 
 class TestDrawdownManager:
@@ -191,69 +190,69 @@ class TestDrawdownManager:
 
     def test_high_water_mark_updates(self):
         """Test high water mark updates on equity increase."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Initial equity
-        self.manager.update(Decimal("100000"), now)
-        assert self.manager.state.daily_high_water_mark == Decimal("100000")
+        self.manager.update(Decimal(100000), now)
+        assert self.manager.state.daily_high_water_mark == Decimal(100000)
 
         # Equity increases
-        self.manager.update(Decimal("105000"), now + timedelta(hours=1))
-        assert self.manager.state.daily_high_water_mark == Decimal("105000")
+        self.manager.update(Decimal(105000), now + timedelta(hours=1))
+        assert self.manager.state.daily_high_water_mark == Decimal(105000)
 
     def test_daily_drawdown_calculation(self):
         """Test daily drawdown is calculated correctly."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Start at 100000
-        self.manager.update(Decimal("100000"), now)
+        self.manager.update(Decimal(100000), now)
 
         # Drop to 97000 (3% drawdown)
-        self.manager.update(Decimal("97000"), now + timedelta(hours=1))
+        self.manager.update(Decimal(97000), now + timedelta(hours=1))
 
         assert self.manager.daily_drawdown == pytest.approx(0.03, abs=0.001)
 
     def test_halts_at_daily_limit(self):
         """Test trading halts when daily limit is exceeded."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
-        self.manager.update(Decimal("100000"), now)
-        self.manager.update(Decimal("95000"), now + timedelta(hours=1))  # 5% drawdown
+        self.manager.update(Decimal(100000), now)
+        self.manager.update(Decimal(95000), now + timedelta(hours=1))  # 5% drawdown
 
         assert self.manager.is_halted is True
         assert self.manager.halt_reason == "daily_limit"
 
     def test_halts_at_weekly_limit(self):
         """Test trading halts when weekly limit is exceeded."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
-        self.manager.update(Decimal("100000"), now)
-        self.manager.update(Decimal("90000"), now + timedelta(hours=1))  # 10% drawdown
+        self.manager.update(Decimal(100000), now)
+        self.manager.update(Decimal(90000), now + timedelta(hours=1))  # 10% drawdown
 
         assert self.manager.is_halted is True
         assert self.manager.halt_reason == "weekly_limit"
 
     def test_daily_reset(self):
         """Test daily high water mark resets on new day."""
-        day1 = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        day2 = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
+        day1 = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        day2 = datetime(2024, 1, 2, 12, 0, 0, tzinfo=UTC)
 
         # Day 1
-        self.manager.update(Decimal("100000"), day1)
-        self.manager.update(Decimal("97000"), day1 + timedelta(hours=1))
+        self.manager.update(Decimal(100000), day1)
+        self.manager.update(Decimal(97000), day1 + timedelta(hours=1))
 
         # Day 2 - new high water mark
-        self.manager.update(Decimal("97000"), day2)
+        self.manager.update(Decimal(97000), day2)
 
-        assert self.manager.state.daily_high_water_mark == Decimal("97000")
+        assert self.manager.state.daily_high_water_mark == Decimal(97000)
         assert self.manager.daily_drawdown == 0.0
 
     def test_remaining_allowance(self):
         """Test remaining drawdown allowance calculation."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
-        self.manager.update(Decimal("100000"), now)
-        self.manager.update(Decimal("98000"), now + timedelta(hours=1))  # 2% drawdown
+        self.manager.update(Decimal(100000), now)
+        self.manager.update(Decimal(98000), now + timedelta(hours=1))  # 2% drawdown
 
         assert self.manager.daily_remaining == pytest.approx(0.03, abs=0.001)  # 5% - 2% = 3%
 

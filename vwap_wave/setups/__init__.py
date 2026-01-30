@@ -14,10 +14,10 @@ from vwap_wave.setups.vwap_bounce import VWAPBounceSetup
 
 __all__ = [
     "BaseSetup",
-    "SetupSignal",
-    "TradeDirection",
     "DiscoveryContinuationSetup",
     "FadeExtremesSetup",
     "ReturnToValueSetup",
+    "SetupSignal",
+    "TradeDirection",
     "VWAPBounceSetup",
 ]
