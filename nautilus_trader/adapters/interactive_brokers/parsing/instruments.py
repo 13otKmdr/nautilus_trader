@@ -405,7 +405,7 @@ def parse_futures_contract(
     price_precision: int = _tick_size_to_precision(contract_details.minTick)
     timestamp = time.time_ns()
     expiration = expiry_timestring_to_datetime(contract_details)
-    activation = expiration - pd.Timedelta(days=90)  # TODO: Make this more accurate
+    activation = get_activation_date(contract_details, expiration)
     raw_symbol = (
         contract_details.contract.localSymbol
         if contract_details.contract.secType == "FUT"
@@ -442,7 +442,7 @@ def parse_option_contract(
         "P": OptionKind.PUT,
     }[contract_details.contract.right]
     expiration = expiry_timestring_to_datetime(contract_details)
-    activation = expiration - pd.Timedelta(days=90)  # TODO: Make this more accurate
+    activation = get_activation_date(contract_details, expiration)
 
     # For options, the multiplier represents the lot size (e.g., 100 shares per contract)
     multiplier = Quantity.from_str(contract_details.contract.multiplier)
@@ -480,6 +480,29 @@ def expiry_timestring_to_datetime(contract_details: IBContractDetails) -> pd.Tim
         return utc_ts
     except (IndexError, ValueError):
         return pd.Timestamp(contract_details.contract.lastTradeDateOrContractMonth, tz="UTC")
+
+
+def get_activation_date(
+    contract_details: IBContractDetails,
+    expiration: pd.Timestamp,
+) -> pd.Timestamp:
+    # 1. Try issueDate
+    if contract_details.issueDate:
+        try:
+            return (
+                pd.to_datetime(contract_details.issueDate, format="%Y%m%d")
+                .tz_localize(
+                    contract_details.timeZoneId,
+                )
+                .tz_convert("UTC")
+            )
+        except Exception:  # noqa: S110
+            pass
+
+    # 2. Fallback
+    # Use expiration - 10 years (approx 3650 days)
+    # This ensures that long-dated contracts are considered active if they are already trading.
+    return expiration - pd.Timedelta(days=3650)
 
 
 def parse_forex_contract(
