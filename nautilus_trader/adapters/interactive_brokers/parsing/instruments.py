@@ -496,7 +496,7 @@ def get_activation_date(
                 )
                 .tz_convert("UTC")
             )
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
     # 2. Fallback
