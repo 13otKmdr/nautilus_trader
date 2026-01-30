@@ -40,7 +40,6 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.model.objects import Price
 from nautilus_trader.model.orders import LimitIfTouchedOrder
-from nautilus_trader.model.orders import MarketIfTouchedOrder
 from nautilus_trader.model.orders import TrailingStopMarketOrder
 from nautilus_trader.trading.strategy import Strategy
 
@@ -270,8 +269,6 @@ class EMACrossStopEntry(Strategy):
         #     trigger_price=self.instrument.make_price(last_bar.high + (self.tick_size * 2)),
         #     emulation_trigger=TriggerType[self.config.emulation_trigger],
         # )
-        # TODO: Uncomment below order for development
-        order: LimitIfTouchedOrder = self.order_factory.limit_if_touched(
         order: LimitIfTouchedOrder = self.order_factory.limit_if_touched(
             instrument_id=self.config.instrument_id,
             order_side=OrderSide.BUY,
@@ -303,23 +300,23 @@ class EMACrossStopEntry(Strategy):
             self.log.error("No tick size loaded")
             return
 
-        order: MarketIfTouchedOrder = self.order_factory.market_if_touched(
-            instrument_id=self.config.instrument_id,
-            order_side=OrderSide.SELL,
-            quantity=self.instrument.make_qty(self.config.trade_size),
-            time_in_force=TimeInForce.IOC,
-            trigger_price=self.instrument.make_price(last_bar.low - (self.tick_size * 2)),
-            emulation_trigger=TriggerType[self.config.emulation_trigger],
-        )
-        # TODO: Uncomment below order for development
-        # order: LimitIfTouchedOrder = self.order_factory.limit_if_touched(
+        # order: MarketIfTouchedOrder = self.order_factory.market_if_touched(
         #     instrument_id=self.config.instrument_id,
         #     order_side=OrderSide.SELL,
         #     quantity=self.instrument.make_qty(self.config.trade_size),
         #     time_in_force=TimeInForce.IOC,
-        #     price=self.instrument.make_price(last_bar.low - (self.tick_size * 2)),
         #     trigger_price=self.instrument.make_price(last_bar.low - (self.tick_size * 2)),
+        #     emulation_trigger=TriggerType[self.config.emulation_trigger],
         # )
+        order: LimitIfTouchedOrder = self.order_factory.limit_if_touched(
+            instrument_id=self.config.instrument_id,
+            order_side=OrderSide.SELL,
+            quantity=self.instrument.make_qty(self.config.trade_size),
+            time_in_force=TimeInForce.IOC,
+            price=self.instrument.make_price(last_bar.low - (self.tick_size * 2)),
+            trigger_price=self.instrument.make_price(last_bar.low - (self.tick_size * 2)),
+            emulation_trigger=TriggerType[self.config.emulation_trigger],
+        )
 
         self.entry = order
         self.submit_order(order)
