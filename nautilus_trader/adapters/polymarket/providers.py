@@ -248,10 +248,16 @@ class PolymarketInstrumentProvider(InstrumentProvider):
             )
             for instrument_id in instrument_ids
         ]
-        results = await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for i, response in enumerate(results):
             instrument_id = instrument_ids[i]
+            
+            # Handle exceptions from individual tasks
+            if isinstance(response, Exception):
+                self._log.error(f"Failed to fetch market for {instrument_id}: {response}")
+                continue
+                
             response = _check_clob_response(response)
 
             try:
