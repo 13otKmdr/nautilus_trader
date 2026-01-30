@@ -278,6 +278,7 @@ class EMACrossStopEntry(Strategy):
             time_in_force=TimeInForce.IOC,
             price=self.instrument.make_price(last_bar.low - (self.tick_size * 2)),
             trigger_price=self.instrument.make_price(last_bar.high + (self.tick_size * 2)),
+            emulation_trigger=TriggerType[self.config.emulation_trigger],
         )
 
         self.entry = order
