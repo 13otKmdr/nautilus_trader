@@ -272,6 +272,7 @@ class EMACrossStopEntry(Strategy):
         # )
         # TODO: Uncomment below order for development
         order: LimitIfTouchedOrder = self.order_factory.limit_if_touched(
+        order: LimitIfTouchedOrder = self.order_factory.limit_if_touched(
             instrument_id=self.config.instrument_id,
             order_side=OrderSide.BUY,
             quantity=self.instrument.make_qty(self.config.trade_size),
