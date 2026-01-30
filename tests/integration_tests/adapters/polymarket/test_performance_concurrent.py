@@ -1,4 +1,3 @@
-
 import time
 from unittest.mock import MagicMock
 
@@ -19,14 +18,12 @@ def mock_clob_client_delayed():
             "condition_id": condition_id,
             "active": True,
             "closed": False,
-            "tokens": [
-                {"token_id": "123", "outcome": "Yes"},
-                {"token_id": "456", "outcome": "No"}
-            ]
+            "tokens": [{"token_id": "123", "outcome": "Yes"}, {"token_id": "456", "outcome": "No"}],
         }
 
     client.get_market.side_effect = delayed_get_market
     return client
+
 
 @pytest.mark.asyncio
 async def test_load_markets_seq_concurrency(mock_clob_client_delayed):

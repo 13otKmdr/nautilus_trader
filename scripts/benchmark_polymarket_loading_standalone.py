@@ -1,4 +1,3 @@
-
 import asyncio
 import time
 from dataclasses import dataclass
@@ -10,6 +9,7 @@ from typing import Any
 class Symbol:
     value: str
 
+
 @dataclass
 class InstrumentId:
     symbol: Symbol
@@ -18,19 +18,28 @@ class InstrumentId:
     def from_str(cls, s):
         return cls(Symbol(s))
 
+
 def get_polymarket_condition_id(instrument_id: InstrumentId) -> str:
     parts = instrument_id.symbol.value.split("-")
     return parts[0]
+
 
 def _check_clob_response(response: dict[str, Any] | str) -> dict[str, Any]:
     if isinstance(response, str):
         raise ValueError(response)
     return response
 
+
 class MockLogger:
-    def warning(self, msg): pass
-    def error(self, msg): pass
-    def info(self, msg): pass
+    def warning(self, msg):
+        pass
+
+    def error(self, msg):
+        pass
+
+    def info(self, msg):
+        pass
+
 
 class MockClient:
     def get_market(self, condition_id):
@@ -39,11 +48,9 @@ class MockClient:
             "condition_id": condition_id,
             "active": True,
             "closed": False,
-            "tokens": [
-                {"token_id": "123", "outcome": "Yes"},
-                {"token_id": "456", "outcome": "No"}
-            ]
+            "tokens": [{"token_id": "123", "outcome": "Yes"}, {"token_id": "456", "outcome": "No"}],
         }
+
 
 class PolymarketInstrumentProvider:
     def __init__(self, client):
@@ -100,14 +107,14 @@ class PolymarketInstrumentProvider:
             except ValueError as e:
                 self._log.error(f"Unable to parse market: {e}, {response}")
 
+
 async def main():
     client = MockClient()
     provider = PolymarketInstrumentProvider(client)
 
     # Generate 10 instrument IDs
     instrument_ids = [
-        InstrumentId.from_str(f"condition_{i}-token_{i}.POLYMARKET")
-        for i in range(10)
+        InstrumentId.from_str(f"condition_{i}-token_{i}.POLYMARKET") for i in range(10)
     ]
 
     print("Starting concurrent benchmark...")
@@ -115,6 +122,7 @@ async def main():
     await provider._load_markets_seq(instrument_ids)
     end = time.perf_counter()
     print(f"Time taken: {end - start:.4f}s")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
