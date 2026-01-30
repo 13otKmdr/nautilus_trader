@@ -1,4 +1,3 @@
-
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
@@ -22,7 +21,7 @@ async def test_provider_loads_valid_cached_instrument(mocker):
     # Mock dependencies
     client = MagicMock()
     client._cache = MagicMock()
-    client._cache.instrument.return_value = None # Initially not in client cache
+    client._cache.instrument.return_value = None  # Initially not in client cache
 
     clock = LiveClock()
 
