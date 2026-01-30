@@ -252,13 +252,16 @@ class PolymarketInstrumentProvider(InstrumentProvider):
 
         for i, response in enumerate(results):
             instrument_id = instrument_ids[i]
-            
-            # Handle exceptions from individual tasks
+
             if isinstance(response, Exception):
-                self._log.error(f"Failed to fetch market for {instrument_id}: {response}")
+                self._log.error(f"Failed to load instrument {instrument_id}: {response}")
                 continue
-                
-            response = _check_clob_response(response)
+
+            try:
+                response = _check_clob_response(response)
+            except Exception as e:
+                self._log.error(f"Failed to check CLOB response for {instrument_id}: {e}")
+                continue
 
             try:
                 active = response["active"]
