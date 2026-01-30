@@ -1449,7 +1449,14 @@ class InteractiveBrokersExecutionClient(LiveExecutionClient):
                 )
                 self._log.debug(f"Order {order.client_order_id} is filled (synthesized fill)")
         elif status == OrderStatus.PENDING_CANCEL:
-            # TODO: self.generate_order_pending_cancel
+            if order.status != OrderStatus.PENDING_CANCEL:
+                self.generate_order_pending_cancel(
+                    strategy_id=order.strategy_id,
+                    instrument_id=order.instrument_id,
+                    client_order_id=order.client_order_id,
+                    venue_order_id=order.venue_order_id,
+                    ts_event=self._clock.timestamp_ns(),
+                )
             self._log.warning(f"Order {order.client_order_id} is {status.name}")
         elif status == OrderStatus.CANCELED:
             if order.status != OrderStatus.CANCELED:
