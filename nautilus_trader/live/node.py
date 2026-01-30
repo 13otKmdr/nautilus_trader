@@ -468,6 +468,18 @@ class TradingNode:
             if not loop.is_running():
                 loop.run_until_complete(self.dispose_async())
             else:
+                # If running, check if we are in the loop thread to avoid deadlock
+                try:
+                    current_loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    current_loop = None
+
+                if current_loop is loop:
+                    raise RuntimeError(
+                        "Cannot call synchronous `dispose` from the event loop thread. "
+                        "Use `await node.dispose_async()` instead."
+                    )
+
                 try:
                     timeout = self.kernel.clock.utc_now() + timedelta(
                         seconds=self._config.timeout_disconnection,
