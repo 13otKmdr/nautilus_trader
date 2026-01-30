@@ -560,7 +560,7 @@ def test_activation_date_calculation():
     # Case 2: Fallback (Long dated)
     details_3 = IBTestContractStubs.cl_future_contract_details()
     # Set expiration to 2 years from now
-    expiry_dt = pd.Timestamp("2030-01-01", tz="UTC")
+    expiry_dt = pd.Timestamp.now("UTC").floor("D") + pd.Timedelta(days=730)
     details_3.contract.lastTradeDateOrContractMonth = expiry_dt.strftime("%Y%m%d")
     details_3.tradingHours = "CLOSED"  # Invalid trading hours for parsing start
     details_3.issueDate = ""
@@ -573,6 +573,6 @@ def test_activation_date_calculation():
     # Expected: Expiry - 10 years (3650 days)
     # expiry_timestring_to_datetime will return expiry_dt because tradingHours parsing will fail/return CLOSED
     expected_expiry = pd.Timestamp(expiry_dt.strftime("%Y%m%d"), tz="UTC")
-    expected_activation = expected_expiry - pd.DateOffset(years=10)
+    expected_activation = expected_expiry - pd.Timedelta(days=3650)
 
     assert contract_3.activation_ns == expected_activation.value

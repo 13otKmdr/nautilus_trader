@@ -496,13 +496,13 @@ def get_activation_date(
                 )
                 .tz_convert("UTC")
             )
-        except ValueError:
+        except Exception:
             pass
 
     # 2. Fallback
     # Use expiration - 10 years (approx 3650 days)
     # This ensures that long-dated contracts are considered active if they are already trading.
-    return expiration - pd.DateOffset(years=10)
+    return expiration - pd.Timedelta(days=3650)
 
 
 def parse_forex_contract(
