@@ -40,12 +40,12 @@ from nautilus_trader.adapters.interactive_brokers.parsing.instruments import (
 from nautilus_trader.common.component import Clock
 from nautilus_trader.common.providers import InstrumentProvider
 from nautilus_trader.config import resolve_path
-from nautilus_trader.persistence.catalog.base import BaseDataCatalog
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import generic_spread_id_to_list
 from nautilus_trader.model.identifiers import is_generic_spread_id
 from nautilus_trader.model.identifiers import new_generic_spread_id
 from nautilus_trader.model.instruments import Instrument
+from nautilus_trader.persistence.catalog.base import BaseDataCatalog
 
 
 class InteractiveBrokersInstrumentProvider(InstrumentProvider):
@@ -131,34 +131,41 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         now = self._clock.utc_now()
 
         for instrument in instruments:
-            # Check validity
-            ts_event_ns = instrument.ts_event
-            if not ts_event_ns:
-                continue
-
-            ts_event = pd.Timestamp(ts_event_ns, unit="ns", tz="UTC")
-            age = now - ts_event
-            if age.days < self._cache_validity_days:
-                # Check if it has contract info
-                if instrument.info and instrument.info.get("contract"):
-                    valid_instruments.append(instrument)
+            if self._is_instrument_valid_for_cache(instrument, now):
+                valid_instruments.append(instrument)
 
         if valid_instruments:
-            self._log.info(f"Found {len(valid_instruments)} valid instruments in catalog")
+            self._process_valid_instruments(valid_instruments)
 
-            for instrument in valid_instruments:
-                try:
-                    details = dict_to_contract_details(instrument.info)
+    def _is_instrument_valid_for_cache(self, instrument: Instrument, now: pd.Timestamp) -> bool:
+        ts_event_ns = instrument.ts_event
+        if not ts_event_ns:
+            return False
 
-                    self.add(instrument)
-                    if not self._client._cache.instrument(instrument.id):
-                        self._client._cache.add_instrument(instrument)
+        ts_event = pd.Timestamp(ts_event_ns, unit="ns", tz="UTC")
+        age = now - ts_event
 
-                    self.contract[instrument.id] = details.contract
-                    self.contract_details[instrument.id] = details
-                    self.contract_id_to_instrument_id[details.contract.conId] = instrument.id
-                except Exception as e:
-                    self._log.error(f"Failed to restore cached instrument {instrument.id}: {e}")
+        return (
+            age.days < self._cache_validity_days
+            and bool(instrument.info and instrument.info.get("contract"))
+        )
+
+    def _process_valid_instruments(self, valid_instruments: list[Instrument]) -> None:
+        self._log.info(f"Found {len(valid_instruments)} valid instruments in catalog")
+
+        for instrument in valid_instruments:
+            try:
+                details = dict_to_contract_details(instrument.info)
+
+                self.add(instrument)
+                if not self._client._cache.instrument(instrument.id):
+                    self._client._cache.add_instrument(instrument)
+
+                self.contract[instrument.id] = details.contract
+                self.contract_details[instrument.id] = details
+                self.contract_id_to_instrument_id[details.contract.conId] = instrument.id
+            except Exception as e:
+                self._log.error(f"Failed to restore cached instrument {instrument.id}: {e}")
 
     def _is_filtered_sec_type(self, sec_type: str | None) -> bool:
         return bool(sec_type and sec_type in self._filter_sec_types)
