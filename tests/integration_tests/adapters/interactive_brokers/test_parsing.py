@@ -573,6 +573,6 @@ def test_activation_date_calculation():
     # Expected: Expiry - 10 years (3650 days)
     # expiry_timestring_to_datetime will return expiry_dt because tradingHours parsing will fail/return CLOSED
     expected_expiry = pd.Timestamp(expiry_dt.strftime("%Y%m%d"), tz="UTC")
-    expected_activation = expected_expiry - pd.Timedelta(days=3650)
+    expected_activation = expected_expiry - pd.DateOffset(years=10)
 
     assert contract_3.activation_ns == expected_activation.value
