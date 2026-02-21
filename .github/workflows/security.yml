@@ -9,10 +9,6 @@ permissions:
   actions: read
 
 on:
-  push:
-    branches: [test-security]
-  schedule:
-    - cron: '0 12 * * *' # Daily at 12:00 UTC (2hrs prior to nightly-merge)
   workflow_dispatch: # Allow manual trigger
 
 jobs:

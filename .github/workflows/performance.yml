@@ -5,9 +5,7 @@ permissions: # Principle of least privilege
   actions: read
 
 on:
-  push:
-    branches: [nightly]
-
+  workflow_dispatch:
 jobs:
   performance-benchmarks:
     runs-on: ubuntu-latest

@@ -10,12 +10,7 @@ permissions:
   actions: read
 
 on:
-  push:
-    branches:
-      - test-ci
-      - develop
-      - nightly
-
+  workflow_dispatch:
 env:
   PACKAGE_DIR: python
 

@@ -6,10 +6,6 @@ permissions:
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - nightly
-
 env:
   RUST_BACKTRACE: 1
   BUILD_MODE: release

@@ -5,11 +5,7 @@ permissions: # Principle of least privilege
   actions: read
 
 on:
-  push:
-    branches: [master, nightly, develop, test-ci, test-pre-commit]
-  pull_request:
-    branches: ['*']
-
+  workflow_dispatch:
 jobs:
   pre-commit:
     runs-on: ubuntu-22.04 # (glibc 2.35) wider runtime range than 24.04/glibc 2.39

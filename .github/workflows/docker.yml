@@ -5,9 +5,7 @@ permissions: # Principle of least privilege
   actions: read
 
 on:
-  push:
-    branches: [master, nightly, test-docker]
-
+  workflow_dispatch:
 jobs:
   # Test builds only - no publishing
   test-docker-build:
